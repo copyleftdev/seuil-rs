@@ -322,30 +322,24 @@
       transform: rotate(180deg);
     }
 
-    .examples-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      z-index: 199;
-    }
-
-    .examples-overlay.open { display: block; }
+    /* Overlay removed — using document click listener instead */
 
     .examples-dropdown {
       display: none;
-      position: absolute;
-      top: calc(100% + 6px);
+      position: fixed;
+      top: var(--header-h);
       left: 50%;
       transform: translateX(-50%) translateY(-4px);
       opacity: 0;
       background: var(--bg-surface-2);
       border: 1px solid var(--border-default);
       border-radius: var(--radius-md);
-      width: 420px;
-      max-height: 480px;
+      width: 440px;
+      max-height: min(520px, calc(100vh - 80px));
       overflow-y: auto;
-      z-index: 200;
-      box-shadow: var(--shadow-xl);
+      z-index: 9999;
+      pointer-events: auto;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05);
       transition: opacity var(--transition-fast), transform var(--transition-fast);
     }
 
@@ -1020,7 +1014,7 @@
 </div>
 
 <!-- ===== OVERLAY for closing dropdown ===== -->
-<div class="examples-overlay" id="examples-overlay"></div>
+<!-- overlay removed -->
 
 <script type="module">
 // ============================================================================
@@ -1344,7 +1338,7 @@ const $statusbarLines = document.getElementById('statusbar-lines');
 const $jsonBadge = document.getElementById('json-status-badge');
 const $examplesTrigger = document.getElementById('examples-trigger');
 const $examplesDropdown = document.getElementById('examples-dropdown');
-const $examplesOverlay = document.getElementById('examples-overlay');
+// overlay removed — using document click
 
 // ============================================================================
 // EDITOR CREATION
@@ -1647,42 +1641,54 @@ function escapeHtml(str) {
 }
 
 function setExprText(text) {
-  if (exprView) {
-    exprView.dispatch({ changes: { from: 0, to: exprView.state.doc.length, insert: text } });
-  }
-  // Also set fallback textarea if it exists
+  try {
+    if (exprView) {
+      exprView.dispatch({ changes: { from: 0, to: exprView.state.doc.length, insert: text } });
+      return;
+    }
+  } catch(e) { console.warn('[seuil] CM expr dispatch failed:', e); }
   const ta = document.getElementById('expr-textarea-fallback');
   if (ta) ta.value = text;
 }
 
 function setDataText(text) {
-  if (dataView) {
-    dataView.dispatch({ changes: { from: 0, to: dataView.state.doc.length, insert: text } });
-  }
+  try {
+    if (dataView) {
+      dataView.dispatch({ changes: { from: 0, to: dataView.state.doc.length, insert: text } });
+      return;
+    }
+  } catch(e) { console.warn('[seuil] CM data dispatch failed:', e); }
   const ta = document.getElementById('data-textarea-fallback');
   if (ta) ta.value = text;
 }
 
 function getExprText() {
-  if (exprView) return exprView.state.doc.toString().trim();
+  try {
+    if (exprView) return exprView.state.doc.toString().trim();
+  } catch(e) {}
   const ta = document.getElementById('expr-textarea-fallback');
   return ta ? ta.value.trim() : '';
 }
 
 function getDataText() {
-  if (dataView) return dataView.state.doc.toString().trim();
+  try {
+    if (dataView) return dataView.state.doc.toString().trim();
+  } catch(e) {}
   const ta = document.getElementById('data-textarea-fallback');
   return ta ? ta.value.trim() : '';
 }
 
 function loadExample(ex) {
-  console.log('[seuil] Loading example:', ex.name);
+  console.log('[seuil] Loading example:', ex.name, ex);
   setExprText(ex.expr);
   if (ex.data) {
     setDataText(ex.data);
   }
   // Small delay to let editors update, then eval
-  setTimeout(runEval, 50);
+  setTimeout(() => {
+    console.log('[seuil] Running eval after example load');
+    runEval();
+  }, 100);
 }
 
 function toggleExamples() {
@@ -1698,14 +1704,12 @@ function openExamples() {
   $examplesDropdown.classList.add('open');
   $examplesTrigger.classList.add('open');
   $examplesTrigger.setAttribute('aria-expanded', 'true');
-  $examplesOverlay.classList.add('open');
 }
 
 function closeExamples() {
   $examplesDropdown.classList.remove('open');
   $examplesTrigger.classList.remove('open');
   $examplesTrigger.setAttribute('aria-expanded', 'false');
-  $examplesOverlay.classList.remove('open');
 }
 
 $examplesTrigger.addEventListener('click', (e) => {
@@ -1713,7 +1717,12 @@ $examplesTrigger.addEventListener('click', (e) => {
   toggleExamples();
 });
 
-$examplesOverlay.addEventListener('click', closeExamples);
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#examples-container')) {
+    closeExamples();
+  }
+});
 
 // Close on Escape
 document.addEventListener('keydown', (e) => {
