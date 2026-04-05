@@ -1,12 +1,12 @@
 [package]
 name = "seuil"
-version = "0.1.0"
+version = "0.1.1"
 description = "A complete, safe JSONata implementation in Rust — JSON query, transform, and expression evaluation"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-readme = "../../README.md"
+readme = "README.md"
 keywords = ["jsonata", "json", "query", "transform", "edi"]
 categories = ["parser-implementations", "encoding", "data-structures", "compilers"]
 documentation = "https://docs.rs/seuil"

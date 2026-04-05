@@ -14,7 +14,10 @@ fn main() -> seuil::Result<()> {
     // Extract dental benefits only (service type 35)
     let dental = Seuil::compile("benefitInformation[serviceType='35']")?;
     let result = dental.evaluate(&response)?;
-    println!("Dental benefits: {}", serde_json::to_string_pretty(&result).unwrap());
+    println!(
+        "Dental benefits: {}",
+        serde_json::to_string_pretty(&result).unwrap()
+    );
 
     // Get remaining annual maximum
     let max_expr = Seuil::compile("benefitInformation[serviceType='35' and code='1'].amount")?;
