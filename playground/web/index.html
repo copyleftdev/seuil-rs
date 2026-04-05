@@ -1493,6 +1493,9 @@ function showResult(formatted, elapsed) {
         insert: formatted,
       },
     });
+  } else {
+    const pre = document.getElementById('result-pre-fallback');
+    if (pre) pre.textContent = formatted;
   }
 
   // Trigger fade-in animation
@@ -1560,8 +1563,8 @@ function showEmpty() {
 function runEval() {
   if (!wasmReady) return;
 
-  const expr = exprView ? exprView.state.doc.toString().trim() : '';
-  const jsonStr = dataView ? dataView.state.doc.toString().trim() : '';
+  const expr = getExprText();
+  const jsonStr = getDataText();
 
   if (!expr) {
     showEmpty();
@@ -1643,18 +1646,43 @@ function escapeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function loadExample(ex) {
+function setExprText(text) {
   if (exprView) {
-    exprView.dispatch({
-      changes: { from: 0, to: exprView.state.doc.length, insert: ex.expr },
-    });
+    exprView.dispatch({ changes: { from: 0, to: exprView.state.doc.length, insert: text } });
   }
-  if (ex.data && dataView) {
-    dataView.dispatch({
-      changes: { from: 0, to: dataView.state.doc.length, insert: ex.data },
-    });
+  // Also set fallback textarea if it exists
+  const ta = document.getElementById('expr-textarea-fallback');
+  if (ta) ta.value = text;
+}
+
+function setDataText(text) {
+  if (dataView) {
+    dataView.dispatch({ changes: { from: 0, to: dataView.state.doc.length, insert: text } });
   }
-  runEval();
+  const ta = document.getElementById('data-textarea-fallback');
+  if (ta) ta.value = text;
+}
+
+function getExprText() {
+  if (exprView) return exprView.state.doc.toString().trim();
+  const ta = document.getElementById('expr-textarea-fallback');
+  return ta ? ta.value.trim() : '';
+}
+
+function getDataText() {
+  if (dataView) return dataView.state.doc.toString().trim();
+  const ta = document.getElementById('data-textarea-fallback');
+  return ta ? ta.value.trim() : '';
+}
+
+function loadExample(ex) {
+  console.log('[seuil] Loading example:', ex.name);
+  setExprText(ex.expr);
+  if (ex.data) {
+    setDataText(ex.data);
+  }
+  // Small delay to let editors update, then eval
+  setTimeout(runEval, 50);
 }
 
 function toggleExamples() {
@@ -1784,24 +1812,62 @@ document.addEventListener('keydown', (e) => {
 // ============================================================================
 // INIT
 // ============================================================================
+function createTextareaFallbacks() {
+  const style = 'width:100%;height:100%;background:transparent;color:#e4e4ef;border:none;outline:none;resize:none;padding:16px;font-family:"JetBrains Mono",monospace;font-size:14px;line-height:1.6;tab-size:2;';
+
+  const exprMount = document.getElementById('expr-editor-mount');
+  if (exprMount) {
+    exprMount.innerHTML = `<textarea id="expr-textarea-fallback" style="${style}" spellcheck="false" placeholder="Enter JSONata expression...">${DEFAULT_EXPR}</textarea>`;
+    const ta = document.getElementById('expr-textarea-fallback');
+    ta.addEventListener('input', debouncedEval);
+  }
+
+  const dataMount = document.getElementById('data-editor-mount');
+  if (dataMount) {
+    dataMount.innerHTML = `<textarea id="data-textarea-fallback" style="${style}" spellcheck="false" placeholder="Enter JSON data...">${DEFAULT_DATA}</textarea>`;
+    const ta = document.getElementById('data-textarea-fallback');
+    ta.addEventListener('input', debouncedEval);
+  }
+
+  const resultMount = document.getElementById('result-editor-mount');
+  if (resultMount) {
+    resultMount.innerHTML = `<pre id="result-pre-fallback" style="${style}overflow:auto;"></pre>`;
+  }
+}
+
 async function main() {
   setStatus('loading', 'Loading WASM...');
   console.log('[seuil] Initializing playground...');
 
-  // Create editors
-  exprView = createExprEditor(document.getElementById('expr-editor-mount'));
-  dataView = createDataEditor(document.getElementById('data-editor-mount'));
-  resultView = createResultEditor(document.getElementById('result-editor-mount'));
+  // Build examples FIRST (doesn't depend on editors)
+  try {
+    buildExamplesDropdown();
+    console.log('[seuil] Examples loaded:', EXAMPLES.length);
+  } catch (e) {
+    console.error('[seuil] Failed to build examples:', e);
+  }
 
-  // Build examples
-  buildExamplesDropdown();
+  // Create editors (with textarea fallback if CodeMirror fails)
+  try {
+    exprView = createExprEditor(document.getElementById('expr-editor-mount'));
+    dataView = createDataEditor(document.getElementById('data-editor-mount'));
+    resultView = createResultEditor(document.getElementById('result-editor-mount'));
+    console.log('[seuil] CodeMirror editors created');
+  } catch (e) {
+    console.warn('[seuil] CodeMirror failed, using textarea fallback:', e);
+    createTextareaFallbacks();
+  }
 
   // Set up splitters
-  setupVerticalDivider();
-  setupHorizontalDivider();
+  try {
+    setupVerticalDivider();
+    setupHorizontalDivider();
+  } catch (e) {
+    console.warn('[seuil] Splitters failed:', e);
+  }
 
   // Validate initial JSON
-  validateJsonInput();
+  try { validateJsonInput(); } catch(e) {}
 
   // Load WASM
   try {
