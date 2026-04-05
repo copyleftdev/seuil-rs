@@ -5,7 +5,7 @@ members = [
     "vopr",
     "chaos",
 ]
-exclude = ["fuzz"]
+exclude = ["fuzz", "playground/wasm"]
 
 [workspace.package]
 edition = "2021"
