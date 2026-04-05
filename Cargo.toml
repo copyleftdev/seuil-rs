@@ -11,7 +11,7 @@ exclude = ["fuzz"]
 edition = "2021"
 license = "Apache-2.0"
 authors = ["Zuub"]
-repository = "https://github.com/zuub/seuil-rs"
+repository = "https://github.com/copyleftdev/seuil-rs"
 
 [workspace.dependencies]
 bumpalo = { version = "3.16", features = ["collections", "boxed", "allocator-api2"] }

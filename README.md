@@ -2,14 +2,14 @@
 
 **A complete, safe JSONata implementation in Rust — JSON query, transform, and expression evaluation.**
 
-[![CI](https://github.com/zuub/seuil-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/zuub/seuil-rs/actions/workflows/ci.yml)
+[![CI](https://github.com/copyleftdev/seuil-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/copyleftdev/seuil-rs/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/seuil.svg)](https://crates.io/crates/seuil)
 [![Docs.rs](https://docs.rs/seuil/badge.svg)](https://docs.rs/seuil)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![MSRV](https://img.shields.io/badge/MSRV-1.77.0-lightgray.svg)](Cargo.toml)
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](https://github.com/rust-secure-code/safety-dance/)
 
-[Documentation](https://docs.rs/seuil) | [Crate](https://crates.io/crates/seuil) | [Repository](https://github.com/zuub/seuil-rs) | [Changelog](CHANGELOG.md)
+[Documentation](https://docs.rs/seuil) | [Crate](https://crates.io/crates/seuil) | [Repository](https://github.com/copyleftdev/seuil-rs) | [Changelog](CHANGELOG.md)
 
 ---
 

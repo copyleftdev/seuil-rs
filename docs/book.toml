@@ -8,5 +8,5 @@ language = "en"
 build-dir = "../target/book"
 
 [output.html]
-git-repository-url = "https://github.com/zuub/seuil-rs"
-edit-url-template = "https://github.com/zuub/seuil-rs/edit/main/docs/{path}"
+git-repository-url = "https://github.com/copyleftdev/seuil-rs"
+edit-url-template = "https://github.com/copyleftdev/seuil-rs/edit/main/docs/{path}"
