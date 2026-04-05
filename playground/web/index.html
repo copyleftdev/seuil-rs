@@ -504,9 +504,18 @@ function runEval() {
 
   // Use requestAnimationFrame for smooth UI update
   requestAnimationFrame(() => {
-    const start = performance.now();
-    const raw = evaluate(expr, json);
-    const elapsed = performance.now() - start;
+    let raw, elapsed;
+    try {
+      const start = performance.now();
+      raw = evaluate(expr, json);
+      elapsed = performance.now() - start;
+    } catch (e) {
+      console.error('[seuil] evaluate() threw:', e);
+      resultOutput.className = 'result-error';
+      resultOutput.textContent = 'WASM error: ' + e.message;
+      setStatus('err', 'WASM error');
+      return;
+    }
 
     try {
       const result = JSON.parse(raw);
@@ -543,10 +552,12 @@ function debouncedEval() {
 // --- Init ---
 async function main() {
   setStatus('loading', 'Loading WASM...');
+  console.log('[seuil] Loading WASM module...');
 
   try {
     await init();
     wasm_ready = true;
+    console.log('[seuil] WASM loaded successfully');
     setStatus('ok', 'Ready');
     buildExamplesDropdown();
 
@@ -564,9 +575,10 @@ async function main() {
     // Initial eval
     runEval();
   } catch (e) {
+    console.error('[seuil] WASM load failed:', e);
     setStatus('err', 'Failed to load WASM');
     resultOutput.className = 'result-error';
-    resultOutput.textContent = 'Failed to load WebAssembly module: ' + e.message;
+    resultOutput.textContent = 'Failed to load WebAssembly module: ' + e.message + '\n\nCheck browser console for details.';
   }
 }
 
