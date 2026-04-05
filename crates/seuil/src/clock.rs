@@ -5,12 +5,40 @@
 //! uses [`MockEnvironment`] with a seed for fully reproducible evaluation.
 
 use std::cell::{Cell, RefCell};
-use std::time::{SystemTime, UNIX_EPOCH};
 
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use uuid::Uuid;
+
+/// Get current time in milliseconds since Unix epoch (works on all platforms including WASM).
+fn platform_now_millis() -> u64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        js_sys::Date::now() as u64
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock before Unix epoch")
+            .as_millis() as u64
+    }
+}
+
+/// Get current time as ISO 8601 string (works on all platforms including WASM).
+fn platform_now_iso() -> String {
+    let millis = platform_now_millis() as i64;
+    let secs = millis / 1000;
+    let nsecs = ((millis % 1000) * 1_000_000) as u32;
+    if let Some(dt) = DateTime::from_timestamp(secs, nsecs) {
+        dt.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+    } else {
+        // Fallback — should never happen
+        "1970-01-01T00:00:00.000Z".to_string()
+    }
+}
 
 /// Abstraction over all non-deterministic operations.
 ///
@@ -68,15 +96,11 @@ impl Default for RealEnvironment {
 
 impl Environment for RealEnvironment {
     fn now_iso(&self) -> String {
-        let now: DateTime<Utc> = Utc::now();
-        now.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+        platform_now_iso()
     }
 
     fn now_millis(&self) -> u64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system clock before Unix epoch")
-            .as_millis() as u64
+        platform_now_millis()
     }
 
     fn random_f64(&self) -> f64 {
