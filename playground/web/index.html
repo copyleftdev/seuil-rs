@@ -1039,33 +1039,93 @@ import init, { evaluate, validate } from './pkg/seuil_playground_wasm.js';
 // ============================================================================
 // EXAMPLES
 // ============================================================================
+const PATIENTS = JSON.stringify({"patients":[{"id":1,"name":"Jane Doe","dob":"1985-03-15","insurance":{"carrier":"Delta Dental","plan":"PPO","memberId":"DD-12345","groupNum":"GRP-100"},"claims":[{"code":"D0120","description":"Periodic oral exam","amount":45,"status":"paid","date":"2024-01-10"},{"code":"D1110","description":"Adult prophylaxis","amount":95,"status":"paid","date":"2024-01-10"},{"code":"D2740","description":"Crown - porcelain","amount":1200,"status":"pending","date":"2024-02-15"}]},{"id":2,"name":"John Smith","dob":"1990-07-22","insurance":{"carrier":"Cigna","plan":"DHMO","memberId":"CG-67890","groupNum":"GRP-200"},"claims":[{"code":"D0220","description":"Periapical first film","amount":25,"status":"paid","date":"2024-01-05"},{"code":"D2750","description":"Crown - high noble metal","amount":1350,"status":"denied","date":"2024-02-20"},{"code":"D7210","description":"Surgical extraction","amount":350,"status":"paid","date":"2024-03-01"}]},{"id":3,"name":"Alice Johnson","dob":"1978-11-08","insurance":{"carrier":"Delta Dental","plan":"Premier","memberId":"DD-11111","groupNum":"GRP-100"},"claims":[{"code":"D0120","description":"Periodic oral exam","amount":45,"status":"paid","date":"2024-02-01"},{"code":"D4341","description":"Scaling - per quadrant","amount":225,"status":"paid","date":"2024-02-01"},{"code":"D4341","description":"Scaling - per quadrant","amount":225,"status":"paid","date":"2024-02-01"}]}]}, null, 2);
+
+const API_RESPONSE = JSON.stringify({"users":[{"id":1,"username":"alice","email":"alice@example.com","profile":{"firstName":"Alice","lastName":"Chen","age":29,"location":{"city":"San Francisco","state":"CA","country":"US"}},"posts":[{"id":101,"title":"Getting Started with Rust","tags":["rust","programming","beginners"],"likes":142,"published":true},{"id":102,"title":"WASM Deep Dive","tags":["wasm","rust","web"],"likes":89,"published":true}]},{"id":2,"username":"bob","email":"bob@example.com","profile":{"firstName":"Bob","lastName":"Kumar","age":34,"location":{"city":"Austin","state":"TX","country":"US"}},"posts":[{"id":201,"title":"GraphQL vs REST","tags":["api","graphql","rest"],"likes":256,"published":true},{"id":202,"title":"Draft: Microservices","tags":["architecture"],"likes":0,"published":false}]},{"id":3,"username":"carol","email":"carol@example.com","profile":{"firstName":"Carol","lastName":"Martinez","age":41,"location":{"city":"New York","state":"NY","country":"US"}},"posts":[{"id":301,"title":"Data Pipeline Patterns","tags":["data","etl","python"],"likes":312,"published":true},{"id":302,"title":"Real-time Analytics","tags":["data","streaming","kafka"],"likes":198,"published":true},{"id":303,"title":"ML in Production","tags":["ml","deployment"],"likes":445,"published":true}]}]}, null, 2);
+
 const EXAMPLES = [
-  // Basics
+  // --- Basics ---
   { cat: 'Basics', name: 'Simple path', desc: 'Access a nested property', expr: 'Account."Account Name"', data: null },
-  { cat: 'Basics', name: 'Array index', desc: 'Get a specific array element', expr: 'Account.Order[0].OrderID', data: null },
-  { cat: 'Basics', name: 'Wildcards', desc: 'Collect all nested product names', expr: 'Account.Order.Product.`Product Name`', data: null },
-  { cat: 'Basics', name: 'Descendent operator', desc: 'Find all prices anywhere in the tree', expr: '**.Price', data: null },
+  { cat: 'Basics', name: 'Array index', desc: 'Get first order ID', expr: 'Account.Order[0].OrderID', data: null },
+  { cat: 'Basics', name: 'All values', desc: 'Collect all product names', expr: 'Account.Order.Product.`Product Name`', data: null },
+  { cat: 'Basics', name: 'Deep search', desc: 'Find all prices in the tree', expr: '**.Price', data: null },
+  { cat: 'Basics', name: 'Wildcard', desc: 'All properties of first product', expr: 'Account.Order[0].Product[0].*', data: null },
 
-  // Operators
-  { cat: 'Operators', name: 'Arithmetic', desc: 'Compute total cost for first product', expr: 'Account.Order[0].Product[0].(Price * Quantity)', data: null },
-  { cat: 'Operators', name: 'Comparison filter', desc: 'Products over $30', expr: 'Account.Order.Product[Price > 30].`Product Name`', data: null },
-  { cat: 'Operators', name: 'String concatenation', desc: 'Format product strings', expr: 'Account.Order.Product.(`Product Name` & " - $" & $string(Price))', data: null },
-  { cat: 'Operators', name: 'Conditional', desc: 'Ternary operator per product', expr: 'Account.Order.Product.(Price > 50 ? "expensive" : "affordable")', data: null },
+  // --- Operators ---
+  { cat: 'Operators', name: 'Arithmetic', desc: 'Price times quantity', expr: 'Account.Order[0].Product[0].(Price * Quantity)', data: null },
+  { cat: 'Operators', name: 'Comparison', desc: 'Products over $30', expr: 'Account.Order.Product[Price > 30].`Product Name`', data: null },
+  { cat: 'Operators', name: 'String concat', desc: 'Format product lines', expr: 'Account.Order.Product.(`Product Name` & " — $" & $string(Price))', data: null },
+  { cat: 'Operators', name: 'Ternary', desc: 'Conditional per product', expr: 'Account.Order.Product.(Price > 50 ? "expensive" : "affordable")', data: null },
+  { cat: 'Operators', name: 'Range', desc: 'Generate a number sequence', expr: '[1..10]', data: null },
+  { cat: 'Operators', name: 'Membership (in)', desc: 'Check if value is in set', expr: 'Account.Order.Product[`Product Name` in ["Bowler Hat", "Cloak"]].Price', data: null },
 
-  // Functions
-  { cat: 'Functions', name: '$sum', desc: 'Sum all product prices', expr: 'Account.Order.Product.Price ~> $sum()', data: null },
-  { cat: 'Functions', name: '$count', desc: 'Count all products', expr: '$count(Account.Order.Product)', data: null },
-  { cat: 'Functions', name: '$map', desc: 'Square each number in an array', expr: '$map([1, 2, 3, 4, 5], function($v){ $v * $v })', data: null },
-  { cat: 'Functions', name: '$filter', desc: 'Keep only even numbers', expr: '$filter([1, 2, 3, 4, 5, 6, 7, 8], function($v){ $v % 2 = 0 })', data: null },
-  { cat: 'Functions', name: '$reduce', desc: 'Sum via reduce', expr: '$reduce([1, 2, 3, 4, 5], function($prev, $curr){ $prev + $curr })', data: null },
-  { cat: 'Functions', name: '$sort + $reverse', desc: 'Sort products by price descending', expr: 'Account.Order.Product^(>Price).`Product Name`', data: null },
+  // --- String Functions ---
+  { cat: 'Strings', name: '$uppercase / $lowercase', desc: 'Case conversion', expr: 'Account.Order.Product.($uppercase(`Product Name`) & " (" & $lowercase(Description.Colour) & ")")', data: null },
+  { cat: 'Strings', name: '$split + $join', desc: 'Split and rejoin', expr: '$join($split("hello-world-foo-bar", "-"), " ")', data: null },
+  { cat: 'Strings', name: '$replace', desc: 'Replace substrings', expr: '$replace("Hello World", "World", "JSONata")', data: null },
+  { cat: 'Strings', name: '$substring', desc: 'Extract part of a string', expr: '$substring("JSONata expression", 0, 7)', data: null },
+  { cat: 'Strings', name: '$trim + $pad', desc: 'Trim and pad strings', expr: '[$trim("  hello  "), $pad("42", 6, "0")]', data: null },
+  { cat: 'Strings', name: '$contains', desc: 'Check if string contains pattern', expr: 'Account.Order.Product[$contains(`Product Name`, "hat")].`Product Name`', data: null },
+  { cat: 'Strings', name: '$base64encode', desc: 'Encode to base64', expr: '$base64encode("Hello, seuil!")', data: null },
 
-  // Advanced
-  { cat: 'Advanced', name: 'Object transform', desc: 'Build a summary object', expr: '{\n  "total": $sum(Account.Order.Product.(Price * Quantity)),\n  "count": $count(Account.Order.Product),\n  "avg_price": $average(Account.Order.Product.Price)\n}', data: null },
-  { cat: 'Advanced', name: 'Nested HOFs', desc: 'Filter then reduce in one pipeline', expr: '$reduce(\n  $filter([1,2,3,4,5,6,7,8,9,10], function($v){$v > 5}),\n  function($a, $b){ $a + $b }\n)', data: null },
-  { cat: 'Advanced', name: 'Regex match', desc: 'Regex with capture groups', expr: '$match("2024-03-15", /^(\\d{4})-(\\d{2})-(\\d{2})$/)', data: null },
-  { cat: 'Advanced', name: 'Date/time', desc: 'Current timestamp via $now()', expr: '$now()', data: null },
-  { cat: 'Advanced', name: 'String processing', desc: 'Transform + join strings', expr: '$join(Account.Order.Product.(`Product Name` & " (x" & $string(Quantity) & ")"), ", ")', data: null },
+  // --- Numeric Functions ---
+  { cat: 'Numeric', name: '$sum', desc: 'Sum all prices', expr: '$sum(Account.Order.Product.Price)', data: null },
+  { cat: 'Numeric', name: '$average', desc: 'Average price', expr: '$average(Account.Order.Product.Price)', data: null },
+  { cat: 'Numeric', name: '$max / $min', desc: 'Price range', expr: '{"max": $max(Account.Order.Product.Price), "min": $min(Account.Order.Product.Price)}', data: null },
+  { cat: 'Numeric', name: '$round', desc: 'Round to 2 decimal places', expr: '$round(3.14159, 2)', data: null },
+  { cat: 'Numeric', name: '$power + $sqrt', desc: 'Math operations', expr: '{"squared": $power(7, 2), "root": $sqrt(144)}', data: null },
+  { cat: 'Numeric', name: '$abs + $ceil + $floor', desc: 'Rounding functions', expr: '{"abs": $abs(-42), "ceil": $ceil(3.2), "floor": $floor(3.8)}', data: null },
+
+  // --- Array Functions ---
+  { cat: 'Arrays', name: '$count', desc: 'Count products', expr: '$count(Account.Order.Product)', data: null },
+  { cat: 'Arrays', name: '$sort', desc: 'Sort by price descending', expr: 'Account.Order.Product^(>Price).`Product Name`', data: null },
+  { cat: 'Arrays', name: '$reverse', desc: 'Reverse an array', expr: '$reverse([1, 2, 3, 4, 5])', data: null },
+  { cat: 'Arrays', name: '$distinct', desc: 'Remove duplicates', expr: '$distinct([1, 2, 2, 3, 3, 3, 4])', data: null },
+  { cat: 'Arrays', name: '$append', desc: 'Concatenate arrays', expr: '$append([1, 2, 3], [4, 5, 6])', data: null },
+  { cat: 'Arrays', name: '$zip', desc: 'Zip parallel arrays', expr: '$zip(["a","b","c"], [1, 2, 3])', data: null },
+
+  // --- Object Functions ---
+  { cat: 'Objects', name: '$keys', desc: 'Get object keys', expr: '$keys(Account.Order[0].Product[0])', data: null },
+  { cat: 'Objects', name: '$merge', desc: 'Merge objects', expr: '$merge([{"a": 1}, {"b": 2}, {"c": 3}])', data: null },
+  { cat: 'Objects', name: '$spread', desc: 'Spread object to array', expr: '$spread({"x": 1, "y": 2, "z": 3})', data: null },
+  { cat: 'Objects', name: '$type', desc: 'Get value types', expr: '{"str": $type("hello"), "num": $type(42), "bool": $type(true), "arr": $type([1]), "obj": $type({})}', data: null },
+
+  // --- Higher-Order Functions ---
+  { cat: 'HOFs', name: '$map — squares', desc: 'Square each number', expr: '$map([1, 2, 3, 4, 5], function($v){ $v * $v })', data: null },
+  { cat: 'HOFs', name: '$map — with index', desc: 'Map with index parameter', expr: '$map(["a", "b", "c"], function($v, $i){ $string($i) & ": " & $v })', data: null },
+  { cat: 'HOFs', name: '$filter — evens', desc: 'Keep only even numbers', expr: '$filter([1, 2, 3, 4, 5, 6, 7, 8], function($v){ $v % 2 = 0 })', data: null },
+  { cat: 'HOFs', name: '$reduce — sum', desc: 'Fold array to single value', expr: '$reduce([1, 2, 3, 4, 5], function($prev, $curr){ $prev + $curr })', data: null },
+  { cat: 'HOFs', name: '$reduce — factorial', desc: 'Compute 10! via reduce', expr: '$reduce([1..10], function($a, $b){ $a * $b })', data: null },
+  { cat: 'HOFs', name: '$single', desc: 'Find exactly one match', expr: '$single([1, 2, 3, 4, 5], function($v){ $v = 3 })', data: null },
+  { cat: 'HOFs', name: '$each — iterate object', desc: 'Transform object entries', expr: '$each({"a": 1, "b": 2, "c": 3}, function($v, $k){ $k & "=" & $string($v) })', data: null },
+  { cat: 'HOFs', name: '$sift — filter object', desc: 'Keep entries where value > 1', expr: '$sift({"a": 1, "b": 2, "c": 3}, function($v){ $v > 1 })', data: null },
+  { cat: 'HOFs', name: 'Chained pipeline', desc: 'Filter → map → reduce', expr: '$reduce(\n  $map(\n    $filter([1..20], function($v){ $v % 3 = 0 }),\n    function($v){ $v * $v }\n  ),\n  function($a, $b){ $a + $b }\n)', data: null },
+
+  // --- Advanced ---
+  { cat: 'Advanced', name: 'Build summary', desc: 'Aggregate into an object', expr: '{\n  "total": $sum(Account.Order.Product.(Price * Quantity)),\n  "count": $count(Account.Order.Product),\n  "avg_price": $average(Account.Order.Product.Price)\n}', data: null },
+  { cat: 'Advanced', name: 'Regex match', desc: 'Parse date with regex', expr: '$match("2024-03-15", /^(\\d{4})-(\\d{2})-(\\d{2})$/)', data: null },
+  { cat: 'Advanced', name: '$now / $millis', desc: 'Current timestamp', expr: '{"iso": $now(), "millis": $millis()}', data: null },
+  { cat: 'Advanced', name: 'Recursive lambda', desc: 'Fibonacci via recursion', expr: '(\n  $fib := function($n){\n    $n <= 1 ? $n : $fib($n - 1) + $fib($n - 2)\n  };\n  $map([0..12], $fib)\n)', data: null },
+  { cat: 'Advanced', name: 'Lambda composition', desc: 'Compose two functions', expr: '(\n  $double := function($x){ $x * 2 };\n  $addOne := function($x){ $x + 1 };\n  $map([1..5], function($v){ $addOne($double($v)) })\n)', data: null },
+  { cat: 'Advanced', name: 'Variable binding', desc: 'Use variables in expressions', expr: '(\n  $tax := 0.08;\n  $prices := Account.Order.Product.Price;\n  {"subtotal": $sum($prices), "tax": $sum($prices) * $tax, "total": $sum($prices) * (1 + $tax)}\n)', data: null },
+
+  // --- Dental / Healthcare EDI ---
+  { cat: 'Healthcare', name: 'Patient claims', desc: 'All paid claims across patients', expr: 'patients.claims[status="paid"]', data: PATIENTS },
+  { cat: 'Healthcare', name: 'Total billed', desc: 'Sum all claim amounts', expr: '$sum(patients.claims.amount)', data: PATIENTS },
+  { cat: 'Healthcare', name: 'Claims by status', desc: 'Group and count by status', expr: '{\n  "paid": $count(patients.claims[status="paid"]),\n  "pending": $count(patients.claims[status="pending"]),\n  "denied": $count(patients.claims[status="denied"])\n}', data: PATIENTS },
+  { cat: 'Healthcare', name: 'Patient summary', desc: 'Per-patient claim totals', expr: 'patients.{\n  name: $sum(claims.amount)\n}', data: PATIENTS },
+  { cat: 'Healthcare', name: 'Delta Dental only', desc: 'Filter by insurance carrier', expr: 'patients[insurance.carrier="Delta Dental"].name', data: PATIENTS },
+  { cat: 'Healthcare', name: 'High-value claims', desc: 'Claims over $500', expr: 'patients.claims[amount > 500].{"desc": description, "amount": amount, "status": status}', data: PATIENTS },
+  { cat: 'Healthcare', name: 'Denied claims report', desc: 'All denied claims with patient info', expr: 'patients.{"patient": name, "denied": claims[status="denied"].{"code": code, "amount": amount}}', data: PATIENTS },
+
+  // --- API Response ---
+  { cat: 'API Data', name: 'All usernames', desc: 'Extract usernames from API response', expr: 'users.username', data: API_RESPONSE },
+  { cat: 'API Data', name: 'Published posts', desc: 'Only published posts', expr: 'users.posts[published=true].title', data: API_RESPONSE },
+  { cat: 'API Data', name: 'Top posts', desc: 'Posts with >100 likes', expr: 'users.posts[likes > 100].{"title": title, "likes": likes}', data: API_RESPONSE },
+  { cat: 'API Data', name: 'All tags', desc: 'Unique tags across all posts', expr: '$distinct(users.posts.tags)', data: API_RESPONSE },
+  { cat: 'API Data', name: 'User locations', desc: 'Map users to their cities', expr: 'users.{"name": profile.firstName & " " & profile.lastName, "city": profile.location.city}', data: API_RESPONSE },
+  { cat: 'API Data', name: 'Post count per user', desc: 'Count posts per user', expr: 'users.{username: $count(posts)}', data: API_RESPONSE },
+  { cat: 'API Data', name: 'Most popular post', desc: 'Post with the most likes', expr: 'users.posts^(>likes)[0].{"title": title, "likes": likes}', data: API_RESPONSE },
 ];
 
 const DEFAULT_DATA = `{
