@@ -1,0 +1,12 @@
+[book]
+title = "seuil-rs"
+description = "A complete, safe, elite-tested JSONata implementation in Rust"
+authors = ["Zuub"]
+language = "en"
+
+[build]
+build-dir = "../target/book"
+
+[output.html]
+git-repository-url = "https://github.com/zuub/seuil-rs"
+edit-url-template = "https://github.com/zuub/seuil-rs/edit/main/docs/{path}"

@@ -1,0 +1,10 @@
+[
+  {
+    "function": "#fromMillis",
+    "category": "basic date patterns",
+    "description": "should handle opening and closing square bracket literal",
+    "expr": "$fromMillis(1521801216617, '[[Year]]: [[[Y0001]]]')",
+    "data": {},
+    "result": "[Year]: [2018]"
+  }
+]

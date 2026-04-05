@@ -1,0 +1,1 @@
+Email ~> $substringAfter("@") ~> $substringBefore(".") ~> $uppercase()

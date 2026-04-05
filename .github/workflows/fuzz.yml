@@ -1,0 +1,77 @@
+name: Continuous Fuzzing
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:
+
+jobs:
+  fuzz-parse:
+    name: Fuzz Parser (6 hours)
+    runs-on: ubuntu-latest
+    timeout-minutes: 380
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo install cargo-fuzz
+      - name: Download previous corpus
+        uses: actions/download-artifact@v4
+        with:
+          name: fuzz-corpus-parse
+          path: fuzz/corpus/parse
+        continue-on-error: true
+      - name: Run parser fuzzer
+        run: |
+          cd fuzz
+          cargo +nightly fuzz run fuzz_parse -- -max_total_time=21600 -max_len=4096 || true
+      - name: Upload corpus
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-corpus-parse
+          path: fuzz/corpus/parse
+      - name: Check for crashes
+        run: |
+          if ls fuzz/artifacts/fuzz_parse/crash-* 2>/dev/null; then
+            echo "## CRASHES FOUND" >> $GITHUB_STEP_SUMMARY
+            for f in fuzz/artifacts/fuzz_parse/crash-*; do
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              xxd "$f" | head -10 >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+            done
+            exit 1
+          fi
+
+  fuzz-eval:
+    name: Fuzz Evaluator (6 hours)
+    runs-on: ubuntu-latest
+    timeout-minutes: 380
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo install cargo-fuzz
+      - name: Download previous corpus
+        uses: actions/download-artifact@v4
+        with:
+          name: fuzz-corpus-eval
+          path: fuzz/corpus/eval
+        continue-on-error: true
+      - name: Run eval fuzzer
+        run: |
+          cd fuzz
+          cargo +nightly fuzz run fuzz_eval -- -max_total_time=21600 -max_len=4096 || true
+      - name: Upload corpus
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-corpus-eval
+          path: fuzz/corpus/eval
+      - name: Check for crashes
+        run: |
+          if ls fuzz/artifacts/fuzz_eval/crash-* 2>/dev/null; then
+            echo "## CRASHES FOUND" >> $GITHUB_STEP_SUMMARY
+            for f in fuzz/artifacts/fuzz_eval/crash-*; do
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              xxd "$f" | head -10 >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+            done
+            exit 1
+          fi

@@ -1,0 +1,29 @@
+name: VOPR Campaign
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Nightly at 2 AM UTC
+  workflow_dispatch:
+
+jobs:
+  vopr:
+    name: VOPR (1M seeds)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build VOPR
+        run: cargo build -p seuil-vopr --release
+      - name: Run VOPR campaign
+        run: |
+          cargo test -p seuil-vopr --release -- --nocapture 2>&1 | tee vopr_output.txt
+      - name: Check for panics
+        run: |
+          if grep -q "PANIC" vopr_output.txt; then
+            echo "## VOPR PANICS FOUND" >> $GITHUB_STEP_SUMMARY
+            grep "PANIC" vopr_output.txt >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "## VOPR: All seeds passed" >> $GITHUB_STEP_SUMMARY
+          fi
