@@ -6,579 +6,1751 @@
   <title>seuil playground — JSONata for Rust</title>
   <meta name="description" content="Interactive JSONata expression playground powered by seuil-rs compiled to WebAssembly">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script type="importmap">
+  {
+    "imports": {
+      "codemirror": "https://esm.sh/codemirror@6",
+      "@codemirror/lang-json": "https://esm.sh/@codemirror/lang-json@6",
+      "@codemirror/lang-javascript": "https://esm.sh/@codemirror/lang-javascript@6",
+      "@codemirror/theme-one-dark": "https://esm.sh/@codemirror/theme-one-dark@6",
+      "@codemirror/autocomplete": "https://esm.sh/@codemirror/autocomplete@6",
+      "@codemirror/view": "https://esm.sh/@codemirror/view@6",
+      "@codemirror/state": "https://esm.sh/@codemirror/state@6"
+    }
+  }
+  </script>
   <style>
+    /* =========================================================================
+       DESIGN TOKENS
+       ========================================================================= */
     :root {
-      --bg: #0a0a0f;
-      --surface: #12121a;
-      --surface-2: #1a1a26;
-      --surface-3: #222233;
-      --border: #2a2a3d;
-      --border-focus: #5b5bf7;
-      --text: #e4e4ef;
-      --text-dim: #8888a0;
-      --text-muted: #55556a;
-      --accent: #7c7cff;
-      --accent-glow: rgba(124, 124, 255, 0.15);
-      --green: #4ade80;
-      --green-glow: rgba(74, 222, 128, 0.1);
-      --red: #f87171;
-      --red-glow: rgba(248, 113, 113, 0.1);
-      --yellow: #fbbf24;
-      --radius: 12px;
-      --radius-sm: 8px;
-      --mono: 'JetBrains Mono', monospace;
-      --sans: 'Inter', -apple-system, sans-serif;
-      --transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+      --bg-root: #0a0b10;
+      --bg-surface: #0f1017;
+      --bg-surface-2: #141520;
+      --bg-surface-3: #1a1b2e;
+      --bg-elevated: #1e1f33;
+      --bg-hover: rgba(99, 102, 241, 0.06);
+
+      --border-subtle: rgba(255, 255, 255, 0.06);
+      --border-default: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.12);
+      --border-focus: #6366f1;
+
+      --text-primary: #e8e9f0;
+      --text-secondary: #9395a5;
+      --text-tertiary: #5d5f72;
+      --text-inverse: #0a0b10;
+
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --accent-muted: rgba(99, 102, 241, 0.15);
+      --accent-glow: rgba(99, 102, 241, 0.25);
+
+      --green: #22c55e;
+      --green-muted: rgba(34, 197, 94, 0.12);
+      --green-glow: rgba(34, 197, 94, 0.3);
+
+      --red: #ef4444;
+      --red-muted: rgba(239, 68, 68, 0.1);
+      --red-glow: rgba(239, 68, 68, 0.3);
+
+      --yellow: #eab308;
+      --yellow-muted: rgba(234, 179, 8, 0.12);
+
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+
+      --ease: cubic-bezier(0.4, 0, 0.2, 1);
+      --transition: 200ms var(--ease);
+      --transition-fast: 120ms var(--ease);
+      --transition-slow: 300ms var(--ease);
+
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+      --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+      --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+      --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6);
+
+      --header-h: 52px;
+      --status-h: 32px;
+      --panel-header-h: 38px;
+      --divider-w: 5px;
     }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    /* =========================================================================
+       RESET + BASE
+       ========================================================================= */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
 
     body {
-      font-family: var(--sans);
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      overflow-x: hidden;
+      font-family: var(--font-sans);
+      background: var(--bg-root);
+      color: var(--text-primary);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
-    /* --- Header --- */
-    header {
+    ::selection {
+      background: var(--accent-muted);
+      color: var(--text-primary);
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.15); }
+
+    /* =========================================================================
+       HEADER
+       ========================================================================= */
+    .header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 16px 24px;
-      border-bottom: 1px solid var(--border);
-      background: var(--surface);
-      backdrop-filter: blur(12px);
-      position: sticky;
-      top: 0;
+      height: var(--header-h);
+      padding: 0 20px;
+      background: rgba(15, 16, 23, 0.8);
+      backdrop-filter: blur(16px) saturate(1.2);
+      -webkit-backdrop-filter: blur(16px) saturate(1.2);
+      border-bottom: 1px solid var(--border-subtle);
+      position: relative;
       z-index: 100;
+      flex-shrink: 0;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
     }
 
     .logo {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
+      text-decoration: none;
+      color: inherit;
     }
 
     .logo-mark {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
-      background: linear-gradient(135deg, var(--accent), #a78bfa);
+      width: 30px;
+      height: 30px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, #6366f1 0%, #a78bfa 50%, #c084fc 100%);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-family: var(--mono);
+      font-family: var(--font-mono);
       font-weight: 600;
-      font-size: 16px;
+      font-size: 15px;
       color: white;
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+      transition: transform var(--transition), box-shadow var(--transition);
     }
 
-    .logo h1 {
-      font-size: 18px;
-      font-weight: 600;
-      letter-spacing: -0.02em;
+    .logo:hover .logo-mark {
+      transform: scale(1.05);
+      box-shadow: 0 2px 12px rgba(99, 102, 241, 0.5);
     }
 
-    .logo h1 span { color: var(--text-dim); font-weight: 400; }
-
-    .header-links {
+    .logo-text {
       display: flex;
-      gap: 16px;
-      align-items: center;
+      align-items: baseline;
+      gap: 6px;
     }
 
-    .header-links a {
-      color: var(--text-dim);
-      text-decoration: none;
-      font-size: 13px;
+    .logo-name {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: var(--text-primary);
+    }
+
+    .logo-sub {
+      font-size: 12px;
       font-weight: 500;
-      transition: color var(--transition);
+      color: var(--text-tertiary);
+      letter-spacing: -0.01em;
     }
 
-    .header-links a:hover { color: var(--accent); }
+    .header-center {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
 
-    .badge {
+    .wasm-badge {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 4px 10px;
-      border-radius: 20px;
-      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 100px;
+      font-size: 10px;
       font-weight: 600;
-      background: var(--green-glow);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
       color: var(--green);
-      border: 1px solid rgba(74, 222, 128, 0.2);
+      background: var(--green-muted);
+      border: 1px solid rgba(34, 197, 94, 0.15);
+      transition: all var(--transition);
     }
 
-    .badge::before {
-      content: '';
+    .wasm-badge-dot {
       width: 6px;
       height: 6px;
       border-radius: 50%;
       background: var(--green);
-      animation: pulse 2s ease-in-out infinite;
+      animation: pulse-glow 2s ease-in-out infinite;
     }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 1; box-shadow: 0 0 4px var(--green-glow); }
+      50% { opacity: 0.4; box-shadow: none; }
     }
 
-    /* --- Main Layout --- */
-    .layout {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      grid-template-rows: 1fr 1fr;
-      gap: 1px;
-      height: calc(100vh - 57px);
-      background: var(--border);
+    .shortcut-hint {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: var(--text-tertiary);
     }
 
-    .panel {
-      background: var(--surface);
+    .shortcut-hint kbd {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1px 5px;
+      font-family: var(--font-sans);
+      font-size: 10px;
+      font-weight: 600;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-default);
+      border-radius: 4px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .header-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: all var(--transition);
+    }
+
+    .header-link:hover {
+      color: var(--text-primary);
+      background: var(--bg-hover);
+    }
+
+    .header-link svg {
+      width: 14px;
+      height: 14px;
+      opacity: 0.7;
+    }
+
+    .header-link:hover svg { opacity: 1; }
+
+    /* =========================================================================
+       EXAMPLES DROPDOWN
+       ========================================================================= */
+    .examples-trigger {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-default);
+      cursor: pointer;
+      transition: all var(--transition);
+      font-family: var(--font-sans);
+      user-select: none;
+    }
+
+    .examples-trigger:hover {
+      color: var(--text-primary);
+      border-color: var(--border-strong);
+      background: var(--bg-surface-3);
+    }
+
+    .examples-trigger:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .examples-trigger svg {
+      width: 12px;
+      height: 12px;
+      transition: transform var(--transition);
+    }
+
+    .examples-trigger.open svg {
+      transform: rotate(180deg);
+    }
+
+    .examples-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 199;
+    }
+
+    .examples-overlay.open { display: block; }
+
+    .examples-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%) translateY(-4px);
+      opacity: 0;
+      background: var(--bg-surface-2);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      width: 420px;
+      max-height: 480px;
+      overflow-y: auto;
+      z-index: 200;
+      box-shadow: var(--shadow-xl);
+      transition: opacity var(--transition-fast), transform var(--transition-fast);
+    }
+
+    .examples-dropdown.open {
+      display: block;
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .examples-category {
+      padding: 8px 14px 4px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-tertiary);
+      position: sticky;
+      top: 0;
+      background: var(--bg-surface-2);
+      z-index: 1;
+    }
+
+    .examples-category:not(:first-child) {
+      border-top: 1px solid var(--border-subtle);
+      margin-top: 4px;
+      padding-top: 12px;
+    }
+
+    .example-item {
       display: flex;
       flex-direction: column;
+      gap: 2px;
+      padding: 8px 14px;
+      cursor: pointer;
+      border-radius: var(--radius-sm);
+      margin: 2px 4px;
+      transition: background var(--transition-fast);
+    }
+
+    .example-item:hover {
+      background: var(--accent-muted);
+    }
+
+    .example-item:active {
+      background: rgba(99, 102, 241, 0.2);
+    }
+
+    .example-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .example-desc {
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+
+    .example-expr {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--accent-hover);
+      margin-top: 2px;
       overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* =========================================================================
+       MAIN LAYOUT
+       ========================================================================= */
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    .main {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .left-pane {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-width: 280px;
+    }
+
+    .divider-v {
+      width: var(--divider-w);
+      background: var(--bg-root);
+      cursor: col-resize;
       position: relative;
+      flex-shrink: 0;
+      transition: background var(--transition);
+    }
+
+    .divider-v::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 3px;
+      height: 32px;
+      border-radius: 2px;
+      background: var(--border-default);
+      transition: background var(--transition), height var(--transition);
+    }
+
+    .divider-v:hover::after,
+    .divider-v.dragging::after {
+      background: var(--accent);
+      height: 48px;
+    }
+
+    .divider-v:hover,
+    .divider-v.dragging {
+      background: rgba(99, 102, 241, 0.08);
+    }
+
+    .divider-h {
+      height: var(--divider-w);
+      background: var(--bg-root);
+      cursor: row-resize;
+      position: relative;
+      flex-shrink: 0;
+      transition: background var(--transition);
+    }
+
+    .divider-h::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      height: 3px;
+      width: 32px;
+      border-radius: 2px;
+      background: var(--border-default);
+      transition: background var(--transition), width var(--transition);
+    }
+
+    .divider-h:hover::after,
+    .divider-h.dragging::after {
+      background: var(--accent);
+      width: 48px;
+    }
+
+    .divider-h:hover,
+    .divider-h.dragging {
+      background: rgba(99, 102, 241, 0.08);
+    }
+
+    .right-pane {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-width: 280px;
+    }
+
+    /* =========================================================================
+       PANEL
+       ========================================================================= */
+    .panel {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      background: var(--bg-surface);
+      overflow: hidden;
     }
 
     .panel-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 16px;
-      border-bottom: 1px solid var(--border);
-      background: var(--surface-2);
+      height: var(--panel-header-h);
+      padding: 0 14px;
+      background: var(--bg-surface-2);
+      border-bottom: 1px solid var(--border-subtle);
       flex-shrink: 0;
     }
 
-    .panel-title {
+    .panel-label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
       font-size: 11px;
       font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-dim);
+      letter-spacing: 0.06em;
+      color: var(--text-tertiary);
+      user-select: none;
+    }
+
+    .panel-label-icon {
+      width: 14px;
+      height: 14px;
+      opacity: 0.5;
+    }
+
+    .panel-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 500;
+      font-family: var(--font-mono);
+      color: var(--text-tertiary);
+      background: var(--bg-elevated);
     }
 
     .panel-body {
       flex: 1;
       overflow: auto;
       position: relative;
+      min-height: 0;
     }
 
-    /* --- Editor --- */
-    textarea {
-      width: 100%;
+    /* CodeMirror container overrides */
+    .panel-body .cm-editor {
       height: 100%;
       background: transparent;
-      color: var(--text);
-      border: none;
+    }
+
+    .panel-body .cm-editor .cm-scroller {
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      line-height: 1.65;
+      padding: 8px 0;
+    }
+
+    .panel-body .cm-editor .cm-content {
+      padding: 0 8px;
+    }
+
+    .panel-body .cm-editor .cm-gutters {
+      background: transparent;
+      border-right: 1px solid var(--border-subtle);
+    }
+
+    .panel-body .cm-editor .cm-activeLineGutter,
+    .panel-body .cm-editor .cm-activeLine {
+      background: rgba(99, 102, 241, 0.04);
+    }
+
+    .panel-body .cm-editor.cm-focused {
       outline: none;
-      resize: none;
+    }
+
+    .panel-body .cm-editor .cm-cursor {
+      border-left-color: var(--accent);
+    }
+
+    .panel-body .cm-editor .cm-selectionBackground {
+      background: rgba(99, 102, 241, 0.2) !important;
+    }
+
+    .panel-body .cm-editor.cm-focused .cm-selectionBackground {
+      background: rgba(99, 102, 241, 0.25) !important;
+    }
+
+    /* =========================================================================
+       RESULT PANEL
+       ========================================================================= */
+    .result-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .result-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-tertiary);
+      transition: all var(--transition);
+      flex-shrink: 0;
+    }
+
+    .result-dot.success {
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green-glow);
+    }
+
+    .result-dot.error {
+      background: var(--red);
+      box-shadow: 0 0 6px var(--red-glow);
+    }
+
+    .result-dot.evaluating {
+      background: var(--yellow);
+      animation: pulse-eval 0.6s ease-in-out infinite;
+    }
+
+    @keyframes pulse-eval {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .result-timing {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-tertiary);
+      padding: 2px 6px;
+      background: var(--bg-elevated);
+      border-radius: 4px;
+    }
+
+    .result-lines {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-tertiary);
+    }
+
+    .result-error-container {
       padding: 16px;
-      font-family: var(--mono);
-      font-size: 14px;
+      animation: shake 0.3s ease-out;
+    }
+
+    .result-error-box {
+      background: var(--red-muted);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      font-family: var(--font-mono);
+      font-size: 13px;
       line-height: 1.6;
-      tab-size: 2;
-    }
-
-    textarea::placeholder {
-      color: var(--text-muted);
-    }
-
-    textarea:focus {
-      background: rgba(124, 124, 255, 0.02);
-    }
-
-    /* --- Result Panel --- */
-    .result-panel {
-      grid-row: 1 / 3;
-      grid-column: 2;
-    }
-
-    #result-output {
-      padding: 16px;
-      font-family: var(--mono);
-      font-size: 14px;
-      line-height: 1.6;
+      color: var(--red);
       white-space: pre-wrap;
       word-break: break-word;
-      color: var(--text);
-      animation: fadeIn 150ms ease-out;
     }
 
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(4px); }
+    .result-error-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--red);
+      margin-bottom: 6px;
+    }
+
+    .result-error-label svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-3px); }
+      40% { transform: translateX(3px); }
+      60% { transform: translateX(-2px); }
+      80% { transform: translateX(2px); }
+    }
+
+    @keyframes result-in {
+      from { opacity: 0; transform: translateY(3px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
-    .result-success { color: var(--green); }
-    .result-error {
-      color: var(--red);
-      background: var(--red-glow);
-      border-radius: var(--radius-sm);
-      padding: 12px 16px;
-      margin: 16px;
-      border: 1px solid rgba(248, 113, 113, 0.15);
+    .result-fade-in {
+      animation: result-in 200ms var(--ease) forwards;
     }
-    .result-empty { color: var(--text-muted); font-style: italic; }
 
-    /* --- Status Bar --- */
-    .status-bar {
+    .result-empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 8px;
+      color: var(--text-tertiary);
+      font-size: 13px;
+      user-select: none;
+    }
+
+    .result-empty-state svg {
+      width: 32px;
+      height: 32px;
+      opacity: 0.3;
+      margin-bottom: 4px;
+    }
+
+    /* =========================================================================
+       STATUS BAR
+       ========================================================================= */
+    .statusbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 6px 16px;
-      border-top: 1px solid var(--border);
-      background: var(--surface-2);
+      height: var(--status-h);
+      padding: 0 14px;
+      background: var(--bg-surface-2);
+      border-top: 1px solid var(--border-subtle);
+      flex-shrink: 0;
       font-size: 11px;
-      color: var(--text-muted);
+      color: var(--text-tertiary);
     }
 
-    .status-indicator {
+    .statusbar-left {
       display: flex;
       align-items: center;
       gap: 6px;
     }
 
-    .status-dot {
-      width: 7px;
-      height: 7px;
+    .statusbar-dot {
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
-      background: var(--text-muted);
-      transition: background var(--transition);
-    }
-
-    .status-dot.ok { background: var(--green); box-shadow: 0 0 8px rgba(74, 222, 128, 0.4); }
-    .status-dot.err { background: var(--red); box-shadow: 0 0 8px rgba(248, 113, 113, 0.4); }
-    .status-dot.loading { background: var(--yellow); animation: pulse 0.6s ease-in-out infinite; }
-
-    /* --- Examples Dropdown --- */
-    .examples-btn {
-      background: var(--surface-3);
-      border: 1px solid var(--border);
-      color: var(--text-dim);
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-family: var(--sans);
-      font-weight: 500;
-      cursor: pointer;
+      background: var(--text-tertiary);
       transition: all var(--transition);
     }
 
-    .examples-btn:hover {
-      border-color: var(--accent);
-      color: var(--accent);
+    .statusbar-dot.ok {
+      background: var(--green);
+      box-shadow: 0 0 4px var(--green-glow);
     }
 
-    .dropdown {
-      position: relative;
-      display: inline-block;
+    .statusbar-dot.err {
+      background: var(--red);
+      box-shadow: 0 0 4px var(--red-glow);
     }
 
-    .dropdown-content {
-      display: none;
-      position: absolute;
-      right: 0;
-      top: calc(100% + 4px);
-      background: var(--surface-2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      min-width: 320px;
-      z-index: 200;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-      max-height: 400px;
-      overflow-y: auto;
+    .statusbar-dot.loading {
+      background: var(--yellow);
+      animation: pulse-eval 0.6s ease-in-out infinite;
     }
 
-    .dropdown-content.show { display: block; animation: fadeIn 150ms ease-out; }
-
-    .dropdown-item {
-      padding: 10px 14px;
-      cursor: pointer;
-      border-bottom: 1px solid var(--border);
-      transition: background var(--transition);
+    .statusbar-center {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-tertiary);
+      opacity: 0.7;
     }
 
-    .dropdown-item:last-child { border-bottom: none; }
-    .dropdown-item:hover { background: var(--accent-glow); }
-
-    .dropdown-item .label {
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--text);
-      margin-bottom: 2px;
+    .statusbar-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: var(--font-mono);
+      font-size: 10px;
     }
 
-    .dropdown-item .desc {
-      font-size: 11px;
-      color: var(--text-muted);
-      font-family: var(--mono);
-    }
-
-    /* --- Timing --- */
-    .timing {
-      font-family: var(--mono);
-      font-size: 11px;
-      color: var(--text-muted);
-      padding: 2px 8px;
-      background: var(--surface-3);
-      border-radius: 4px;
-    }
-
-    /* --- Responsive --- */
+    /* =========================================================================
+       RESPONSIVE
+       ========================================================================= */
     @media (max-width: 768px) {
-      .layout {
-        grid-template-columns: 1fr;
-        grid-template-rows: 1fr 1fr 1fr;
+      .main {
+        flex-direction: column;
       }
-      .result-panel {
-        grid-row: 3;
-        grid-column: 1;
+
+      .left-pane, .right-pane {
+        min-width: 0;
+        min-height: 120px;
       }
-      .header-links { display: none; }
+
+      .divider-v {
+        display: none;
+      }
+
+      .divider-h-mobile {
+        height: var(--divider-w);
+        background: var(--bg-root);
+        cursor: row-resize;
+        flex-shrink: 0;
+      }
+
+      .shortcut-hint { display: none; }
+      .header-link span { display: none; }
+      .header-link { padding: 5px 6px; }
+      .statusbar-center { display: none; }
+
+      .examples-dropdown {
+        width: calc(100vw - 32px);
+        left: auto;
+        right: -60px;
+        transform: translateY(-4px);
+      }
+
+      .examples-dropdown.open {
+        transform: translateY(0);
+      }
+    }
+
+    /* =========================================================================
+       ACCESSIBILITY
+       ========================================================================= */
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border-width: 0;
+    }
+
+    /* =========================================================================
+       TOOLTIP STYLES
+       ========================================================================= */
+    .cm-tooltip-autocomplete {
+      background: var(--bg-surface-2) !important;
+      border: 1px solid var(--border-default) !important;
+      border-radius: var(--radius-sm) !important;
+      box-shadow: var(--shadow-lg) !important;
+    }
+
+    .cm-tooltip-autocomplete ul li {
+      font-family: var(--font-mono) !important;
+      font-size: 12px !important;
+    }
+
+    .cm-tooltip-autocomplete ul li[aria-selected] {
+      background: var(--accent-muted) !important;
+      color: var(--text-primary) !important;
     }
   </style>
 </head>
 <body>
 
-<header>
-  <div class="logo">
-    <div class="logo-mark">s</div>
-    <h1>seuil <span>playground</span></h1>
-  </div>
-  <div class="header-links">
-    <span class="badge">WASM</span>
-    <a href="https://docs.rs/seuil" target="_blank">Docs</a>
-    <a href="https://crates.io/crates/seuil" target="_blank">Crate</a>
-    <a href="https://github.com/copyleftdev/seuil-rs" target="_blank">GitHub</a>
-  </div>
-</header>
+<div class="app">
+  <!-- ===== HEADER ===== -->
+  <header class="header">
+    <div class="header-left">
+      <a class="logo" href="#" onclick="return false">
+        <div class="logo-mark">s</div>
+        <div class="logo-text">
+          <span class="logo-name">seuil</span>
+          <span class="logo-sub">playground</span>
+        </div>
+      </a>
+      <span class="wasm-badge" id="wasm-badge">
+        <span class="wasm-badge-dot"></span>
+        WASM
+      </span>
+    </div>
 
-<div class="layout">
-  <!-- Expression Editor -->
-  <div class="panel">
-    <div class="panel-header">
-      <span class="panel-title">Expression</span>
-      <div class="dropdown">
-        <button class="examples-btn" onclick="toggleExamples()">Examples</button>
-        <div class="dropdown-content" id="examples-dropdown"></div>
+    <div class="header-center">
+      <div style="position:relative" id="examples-container">
+        <button class="examples-trigger" id="examples-trigger" aria-haspopup="listbox" aria-expanded="false">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
+          Examples
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+        </button>
+        <div class="examples-dropdown" id="examples-dropdown" role="listbox"></div>
+      </div>
+      <span class="shortcut-hint">
+        <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to evaluate
+      </span>
+    </div>
+
+    <div class="header-right">
+      <a class="header-link" href="https://docs.rs/seuil" target="_blank" rel="noopener">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h4l2 2h6v8H2z"/></svg>
+        <span>Docs</span>
+      </a>
+      <a class="header-link" href="https://crates.io/crates/seuil" target="_blank" rel="noopener">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5.5 6h5M5.5 8.5h5M5.5 11h3"/></svg>
+        <span>Crate</span>
+      </a>
+      <a class="header-link" href="https://github.com/copyleftdev/seuil-rs" target="_blank" rel="noopener">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 .2A8 8 0 0 0 5.47 15.79c.4.07.55-.17.55-.38l-.01-1.49c-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48l-.01 2.2c0 .21.15.46.55.38A8 8 0 0 0 8 .2z"/></svg>
+        <span>GitHub</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- ===== MAIN ===== -->
+  <div class="main" id="main">
+    <!-- LEFT PANE: Expression + Data stacked -->
+    <div class="left-pane" id="left-pane" style="flex: 1">
+      <!-- Expression Panel -->
+      <div class="panel" id="expr-panel" style="flex: 1">
+        <div class="panel-header">
+          <div class="panel-label">
+            <svg class="panel-label-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l4-8 4 8"/><path d="M5.5 9.5h5"/></svg>
+            Expression
+          </div>
+          <div class="panel-meta">
+            <span class="panel-badge" id="expr-lang-badge">JSONata</span>
+          </div>
+        </div>
+        <div class="panel-body" id="expr-editor-mount"></div>
+      </div>
+
+      <!-- Horizontal Divider -->
+      <div class="divider-h" id="divider-h"></div>
+
+      <!-- Data Panel -->
+      <div class="panel" id="data-panel" style="flex: 1.2">
+        <div class="panel-header">
+          <div class="panel-label">
+            <svg class="panel-label-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h4v4H3zM9 3h4v4H9zM3 9h4v4H3zM9 9h4v4H9z"/></svg>
+            JSON Data
+          </div>
+          <div class="panel-meta">
+            <span class="panel-badge" id="json-status-badge">Valid</span>
+          </div>
+        </div>
+        <div class="panel-body" id="data-editor-mount"></div>
       </div>
     </div>
-    <div class="panel-body">
-      <textarea id="expr-input" spellcheck="false" placeholder="Enter a JSONata expression..."
-        >Account.Order.Product.Price ~> $sum()</textarea>
-    </div>
-  </div>
 
-  <!-- JSON Input -->
-  <div class="panel result-panel">
-    <div class="panel-header">
-      <span class="panel-title">Result</span>
-      <span class="timing" id="timing"></span>
-    </div>
-    <div class="panel-body">
-      <div id="result-output" class="result-empty">Evaluating...</div>
-    </div>
-    <div class="status-bar">
-      <div class="status-indicator">
-        <div class="status-dot" id="status-dot"></div>
-        <span id="status-text">Ready</span>
+    <!-- Vertical Divider -->
+    <div class="divider-v" id="divider-v"></div>
+
+    <!-- RIGHT PANE: Result -->
+    <div class="right-pane" id="right-pane" style="flex: 1">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-label">
+            <div class="result-status">
+              <div class="result-dot" id="result-dot"></div>
+            </div>
+            Result
+          </div>
+          <div class="panel-meta">
+            <span class="result-lines" id="result-lines"></span>
+            <span class="result-timing" id="result-timing" style="display:none"></span>
+          </div>
+        </div>
+        <div class="panel-body" id="result-container">
+          <div class="result-empty-state" id="result-empty">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            Enter an expression to evaluate
+          </div>
+          <div id="result-editor-mount" style="display:none; height:100%"></div>
+          <div id="result-error" style="display:none"></div>
+        </div>
       </div>
-      <span>seuil v0.1.1 &middot; Rust &rarr; WASM</span>
     </div>
   </div>
 
-  <!-- JSON Data -->
-  <div class="panel">
-    <div class="panel-header">
-      <span class="panel-title">JSON Data</span>
+  <!-- Mobile divider (hidden on desktop) -->
+  <div class="divider-h-mobile" style="display:none"></div>
+
+  <!-- ===== STATUS BAR ===== -->
+  <div class="statusbar">
+    <div class="statusbar-left">
+      <div class="statusbar-dot" id="statusbar-dot"></div>
+      <span id="statusbar-text">Loading...</span>
     </div>
-    <div class="panel-body">
-      <textarea id="json-input" spellcheck="false" placeholder="Enter JSON data..."
->{
+    <div class="statusbar-center">
+      seuil v0.1.1 &middot; Rust &rarr; WASM &middot; 544KB
+    </div>
+    <div class="statusbar-right">
+      <span id="statusbar-timing"></span>
+      <span id="statusbar-lines"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== OVERLAY for closing dropdown ===== -->
+<div class="examples-overlay" id="examples-overlay"></div>
+
+<script type="module">
+// ============================================================================
+// IMPORTS
+// ============================================================================
+import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection, highlightSpecialChars } from '@codemirror/view';
+import { EditorState, Compartment } from '@codemirror/state';
+import { json, jsonParseLinter } from '@codemirror/lang-json';
+import { javascript } from '@codemirror/lang-javascript';
+import { oneDark } from '@codemirror/theme-one-dark';
+import { autocompletion } from '@codemirror/autocomplete';
+import { defaultKeymap, history, historyKeymap, indentWithTab } from 'codemirror';
+import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, indentOnInput, foldGutter, foldKeymap } from 'codemirror';
+import { linter, lintGutter } from 'codemirror';
+import { closeBrackets, closeBracketsKeymap } from 'codemirror';
+import { highlightSelectionMatches, searchKeymap } from 'codemirror';
+
+import init, { evaluate, validate } from './pkg/seuil_playground_wasm.js';
+
+// ============================================================================
+// EXAMPLES
+// ============================================================================
+const EXAMPLES = [
+  // Basics
+  { cat: 'Basics', name: 'Simple path', desc: 'Access a nested property', expr: 'Account."Account Name"', data: null },
+  { cat: 'Basics', name: 'Array index', desc: 'Get a specific array element', expr: 'Account.Order[0].OrderID', data: null },
+  { cat: 'Basics', name: 'Wildcards', desc: 'Collect all nested product names', expr: 'Account.Order.Product.`Product Name`', data: null },
+  { cat: 'Basics', name: 'Descendent operator', desc: 'Find all prices anywhere in the tree', expr: '**.Price', data: null },
+
+  // Operators
+  { cat: 'Operators', name: 'Arithmetic', desc: 'Compute total cost for first product', expr: 'Account.Order[0].Product[0].(Price * Quantity)', data: null },
+  { cat: 'Operators', name: 'Comparison filter', desc: 'Products over $30', expr: 'Account.Order.Product[Price > 30].`Product Name`', data: null },
+  { cat: 'Operators', name: 'String concatenation', desc: 'Format product strings', expr: 'Account.Order.Product.(`Product Name` & " - $" & $string(Price))', data: null },
+  { cat: 'Operators', name: 'Conditional', desc: 'Ternary operator per product', expr: 'Account.Order.Product.(Price > 50 ? "expensive" : "affordable")', data: null },
+
+  // Functions
+  { cat: 'Functions', name: '$sum', desc: 'Sum all product prices', expr: 'Account.Order.Product.Price ~> $sum()', data: null },
+  { cat: 'Functions', name: '$count', desc: 'Count all products', expr: '$count(Account.Order.Product)', data: null },
+  { cat: 'Functions', name: '$map', desc: 'Square each number in an array', expr: '$map([1, 2, 3, 4, 5], function($v){ $v * $v })', data: null },
+  { cat: 'Functions', name: '$filter', desc: 'Keep only even numbers', expr: '$filter([1, 2, 3, 4, 5, 6, 7, 8], function($v){ $v % 2 = 0 })', data: null },
+  { cat: 'Functions', name: '$reduce', desc: 'Sum via reduce', expr: '$reduce([1, 2, 3, 4, 5], function($prev, $curr){ $prev + $curr })', data: null },
+  { cat: 'Functions', name: '$sort + $reverse', desc: 'Sort products by price descending', expr: 'Account.Order.Product^(>Price).`Product Name`', data: null },
+
+  // Advanced
+  { cat: 'Advanced', name: 'Object transform', desc: 'Build a summary object', expr: '{\n  "total": $sum(Account.Order.Product.(Price * Quantity)),\n  "count": $count(Account.Order.Product),\n  "avg_price": $average(Account.Order.Product.Price)\n}', data: null },
+  { cat: 'Advanced', name: 'Nested HOFs', desc: 'Filter then reduce in one pipeline', expr: '$reduce(\n  $filter([1,2,3,4,5,6,7,8,9,10], function($v){$v > 5}),\n  function($a, $b){ $a + $b }\n)', data: null },
+  { cat: 'Advanced', name: 'Regex match', desc: 'Regex with capture groups', expr: '$match("2024-03-15", /^(\\d{4})-(\\d{2})-(\\d{2})$/)', data: null },
+  { cat: 'Advanced', name: 'Date/time', desc: 'Current timestamp via $now()', expr: '$now()', data: null },
+  { cat: 'Advanced', name: 'String processing', desc: 'Transform + join strings', expr: '$join(Account.Order.Product.(`Product Name` & " (x" & $string(Quantity) & ")"), ", ")', data: null },
+];
+
+const DEFAULT_DATA = `{
   "Account": {
     "Account Name": "Firefly",
     "Order": [
       {
         "OrderID": "order103",
         "Product": [
-          {"Product Name": "Bowler Hat", "ProductID": 858383, "SKU": "0406654608", "Description": {"Colour": "Purple", "Width": 300, "Height": 200, "Depth": 210, "Weight": 0.75}, "Price": 34.45, "Quantity": 2},
-          {"Product Name": "Trilby hat", "ProductID": 858236, "SKU": "0406634348", "Description": {"Colour": "Orange", "Width": 300, "Height": 200, "Depth": 210, "Weight": 0.6}, "Price": 21.67, "Quantity": 1}
+          {
+            "Product Name": "Bowler Hat",
+            "ProductID": 858383,
+            "SKU": "0406654608",
+            "Description": {
+              "Colour": "Purple",
+              "Width": 300,
+              "Height": 200,
+              "Depth": 210,
+              "Weight": 0.75
+            },
+            "Price": 34.45,
+            "Quantity": 2
+          },
+          {
+            "Product Name": "Trilby hat",
+            "ProductID": 858236,
+            "SKU": "0406634348",
+            "Description": {
+              "Colour": "Orange",
+              "Width": 300,
+              "Height": 200,
+              "Depth": 210,
+              "Weight": 0.6
+            },
+            "Price": 21.67,
+            "Quantity": 1
+          }
         ]
       },
       {
         "OrderID": "order104",
         "Product": [
-          {"Product Name": "Bowler Hat", "ProductID": 858383, "SKU": "040657863", "Description": {"Colour": "Purple", "Width": 300, "Height": 200, "Depth": 210, "Weight": 0.75}, "Price": 34.45, "Quantity": 4},
-          {"ProductName": "Cloak", "ProductID": 345664, "SKU": "0406654603", "Description": {"Colour": "Black", "Width": 30, "Height": 20, "Depth": 210, "Weight": 2}, "Price": 107.99, "Quantity": 1}
+          {
+            "Product Name": "Bowler Hat",
+            "ProductID": 858383,
+            "SKU": "040657863",
+            "Description": {
+              "Colour": "Purple",
+              "Width": 300,
+              "Height": 200,
+              "Depth": 210,
+              "Weight": 0.75
+            },
+            "Price": 34.45,
+            "Quantity": 4
+          },
+          {
+            "Product Name": "Cloak",
+            "ProductID": 345664,
+            "SKU": "0406654603",
+            "Description": {
+              "Colour": "Black",
+              "Width": 30,
+              "Height": 20,
+              "Depth": 210,
+              "Weight": 2.0
+            },
+            "Price": 107.99,
+            "Quantity": 1
+          }
         ]
       }
     ]
   }
-}</textarea>
-    </div>
-  </div>
-</div>
+}`;
 
-<script type="module">
-import init, { evaluate, validate } from './pkg/seuil_playground_wasm.js';
+const DEFAULT_EXPR = 'Account.Order.Product.Price ~> $sum()';
 
-let wasm_ready = false;
-let eval_timeout = null;
-
-const exprInput = document.getElementById('expr-input');
-const jsonInput = document.getElementById('json-input');
-const resultOutput = document.getElementById('result-output');
-const timingEl = document.getElementById('timing');
-const statusDot = document.getElementById('status-dot');
-const statusText = document.getElementById('status-text');
-
-// --- Examples ---
-const EXAMPLES = [
-  { label: 'Sum prices', expr: 'Account.Order.Product.Price ~> $sum()', desc: 'Sum all product prices' },
-  { label: 'Filter by price', expr: 'Account.Order.Product[Price > 30]', desc: 'Products over $30' },
-  { label: 'Map + transform', expr: 'Account.Order.Product.{"name": `Product Name`, "total": Price * Quantity}', desc: 'Transform to name + total' },
-  { label: 'String concat', expr: 'Account.Order.Product.(`Product Name` & " ($" & $string(Price) & ")")', desc: 'Format product strings' },
-  { label: 'Higher-order $map', expr: '$map([1,2,3,4,5], function($v){ $v * $v })', desc: 'Square each number' },
-  { label: '$filter + $reduce', expr: '$reduce($filter([1,2,3,4,5,6,7,8,9,10], function($v){$v > 5}), function($a,$b){$a+$b})', desc: 'Sum numbers > 5' },
-  { label: 'Nested paths', expr: 'Account.Order.Product.Description.Colour', desc: 'Deep property access' },
-  { label: 'Aggregation', expr: '{ "total": $sum(Account.Order.Product.(Price * Quantity)), "count": $count(Account.Order.Product) }', desc: 'Aggregate into object' },
-  { label: 'Sort products', expr: 'Account.Order.Product^(>Price).`Product Name`', desc: 'Sort by price descending' },
-  { label: 'Conditional', expr: 'Account.Order.Product.(Price > 50 ? "expensive" : "affordable")', desc: 'Ternary per product' },
-  { label: 'Date/time', expr: '$now()', desc: 'Current timestamp' },
-  { label: 'Regex match', expr: '$match("2024-03-15", /^(\\d{4})-(\\d{2})-(\\d{2})$/)', desc: 'Regex with groups' },
+// ============================================================================
+// SEUIL FUNCTION COMPLETIONS (for autocomplete)
+// ============================================================================
+const SEUIL_FUNCTIONS = [
+  { label: '$sum', type: 'function', detail: '(array) => number', info: 'Sum of numeric values' },
+  { label: '$count', type: 'function', detail: '(array) => number', info: 'Number of items' },
+  { label: '$average', type: 'function', detail: '(array) => number', info: 'Mean of numeric values' },
+  { label: '$max', type: 'function', detail: '(array) => number', info: 'Maximum value' },
+  { label: '$min', type: 'function', detail: '(array) => number', info: 'Minimum value' },
+  { label: '$string', type: 'function', detail: '(value) => string', info: 'Cast to string' },
+  { label: '$number', type: 'function', detail: '(value) => number', info: 'Cast to number' },
+  { label: '$boolean', type: 'function', detail: '(value) => boolean', info: 'Cast to boolean' },
+  { label: '$length', type: 'function', detail: '(string) => number', info: 'String length' },
+  { label: '$substring', type: 'function', detail: '(str, start, len?) => string', info: 'Extract substring' },
+  { label: '$trim', type: 'function', detail: '(string) => string', info: 'Trim whitespace' },
+  { label: '$uppercase', type: 'function', detail: '(string) => string', info: 'Convert to uppercase' },
+  { label: '$lowercase', type: 'function', detail: '(string) => string', info: 'Convert to lowercase' },
+  { label: '$contains', type: 'function', detail: '(str, pattern) => boolean', info: 'Test string contains' },
+  { label: '$split', type: 'function', detail: '(str, sep) => array', info: 'Split string' },
+  { label: '$join', type: 'function', detail: '(array, sep?) => string', info: 'Join array to string' },
+  { label: '$replace', type: 'function', detail: '(str, pattern, rep) => string', info: 'Replace in string' },
+  { label: '$match', type: 'function', detail: '(str, regex) => object', info: 'Regex match' },
+  { label: '$map', type: 'function', detail: '(array, fn) => array', info: 'Transform each element' },
+  { label: '$filter', type: 'function', detail: '(array, fn) => array', info: 'Filter elements' },
+  { label: '$reduce', type: 'function', detail: '(array, fn, init?) => value', info: 'Reduce to single value' },
+  { label: '$sort', type: 'function', detail: '(array, fn?) => array', info: 'Sort elements' },
+  { label: '$reverse', type: 'function', detail: '(array) => array', info: 'Reverse array' },
+  { label: '$append', type: 'function', detail: '(a, b) => array', info: 'Append arrays' },
+  { label: '$keys', type: 'function', detail: '(object) => array', info: 'Object keys' },
+  { label: '$values', type: 'function', detail: '(object) => array', info: 'Object values' },
+  { label: '$lookup', type: 'function', detail: '(object, key) => value', info: 'Lookup key in object' },
+  { label: '$spread', type: 'function', detail: '(object) => array', info: 'Spread object to array' },
+  { label: '$merge', type: 'function', detail: '(array) => object', info: 'Merge array of objects' },
+  { label: '$type', type: 'function', detail: '(value) => string', info: 'Type of value' },
+  { label: '$exists', type: 'function', detail: '(value) => boolean', info: 'Test if value exists' },
+  { label: '$assert', type: 'function', detail: '(condition, msg) => void', info: 'Assert condition' },
+  { label: '$now', type: 'function', detail: '() => string', info: 'Current timestamp' },
+  { label: '$millis', type: 'function', detail: '() => number', info: 'Current time in ms' },
+  { label: '$not', type: 'function', detail: '(value) => boolean', info: 'Logical NOT' },
+  { label: '$abs', type: 'function', detail: '(number) => number', info: 'Absolute value' },
+  { label: '$floor', type: 'function', detail: '(number) => number', info: 'Floor value' },
+  { label: '$ceil', type: 'function', detail: '(number) => number', info: 'Ceiling value' },
+  { label: '$round', type: 'function', detail: '(number, precision?) => number', info: 'Round value' },
+  { label: '$power', type: 'function', detail: '(base, exp) => number', info: 'Exponentiation' },
+  { label: '$sqrt', type: 'function', detail: '(number) => number', info: 'Square root' },
+  { label: '$random', type: 'function', detail: '() => number', info: 'Random number 0..1' },
 ];
 
-function buildExamplesDropdown() {
-  const container = document.getElementById('examples-dropdown');
-  EXAMPLES.forEach(ex => {
-    const item = document.createElement('div');
-    item.className = 'dropdown-item';
-    item.innerHTML = `<div class="label">${ex.label}</div><div class="desc">${ex.expr}</div>`;
-    item.addEventListener('click', () => {
-      exprInput.value = ex.expr;
-      container.classList.remove('show');
-      runEval();
-    });
-    container.appendChild(item);
-  });
+function seuilCompletions(context) {
+  const word = context.matchBefore(/\$\w*/);
+  if (!word || (word.from === word.to && !context.explicit)) return null;
+  return {
+    from: word.from,
+    options: SEUIL_FUNCTIONS,
+    validFor: /^\$\w*$/,
+  };
 }
 
-window.toggleExamples = function() {
-  document.getElementById('examples-dropdown').classList.toggle('show');
-};
+// ============================================================================
+// CODEMIRROR THEME (custom overrides atop one-dark)
+// ============================================================================
+const seuilTheme = EditorView.theme({
+  '&': {
+    backgroundColor: 'transparent',
+    color: '#e8e9f0',
+  },
+  '.cm-content': {
+    caretColor: '#6366f1',
+  },
+  '.cm-cursor, .cm-dropCursor': {
+    borderLeftColor: '#6366f1',
+    borderLeftWidth: '2px',
+  },
+  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+  },
+  '.cm-panels': {
+    backgroundColor: '#141520',
+    color: '#e8e9f0',
+  },
+  '.cm-gutters': {
+    backgroundColor: 'transparent',
+    color: '#3a3c50',
+    borderRight: '1px solid rgba(255,255,255,0.06)',
+  },
+  '.cm-activeLineGutter': {
+    backgroundColor: 'transparent',
+    color: '#6366f1',
+  },
+  '.cm-activeLine': {
+    backgroundColor: 'rgba(99, 102, 241, 0.04)',
+  },
+  '.cm-foldPlaceholder': {
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    color: '#818cf8',
+    border: 'none',
+  },
+  '.cm-tooltip': {
+    backgroundColor: '#141520',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '6px',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+  },
+  '.cm-tooltip-autocomplete': {
+    '& > ul > li[aria-selected]': {
+      backgroundColor: 'rgba(99, 102, 241, 0.15)',
+      color: '#e8e9f0',
+    },
+  },
+}, { dark: true });
 
-// Close dropdown on outside click
-document.addEventListener('click', (e) => {
-  if (!e.target.closest('.dropdown')) {
-    document.getElementById('examples-dropdown').classList.remove('show');
+// ============================================================================
+// STATE
+// ============================================================================
+let wasmReady = false;
+let evalTimeout = null;
+let exprView = null;
+let dataView = null;
+let resultView = null;
+
+// ============================================================================
+// DOM REFS
+// ============================================================================
+const $resultDot = document.getElementById('result-dot');
+const $resultTiming = document.getElementById('result-timing');
+const $resultLines = document.getElementById('result-lines');
+const $resultContainer = document.getElementById('result-container');
+const $resultEmpty = document.getElementById('result-empty');
+const $resultEditorMount = document.getElementById('result-editor-mount');
+const $resultError = document.getElementById('result-error');
+const $statusbarDot = document.getElementById('statusbar-dot');
+const $statusbarText = document.getElementById('statusbar-text');
+const $statusbarTiming = document.getElementById('statusbar-timing');
+const $statusbarLines = document.getElementById('statusbar-lines');
+const $jsonBadge = document.getElementById('json-status-badge');
+const $examplesTrigger = document.getElementById('examples-trigger');
+const $examplesDropdown = document.getElementById('examples-dropdown');
+const $examplesOverlay = document.getElementById('examples-overlay');
+
+// ============================================================================
+// EDITOR CREATION
+// ============================================================================
+function createBaseExtensions() {
+  return [
+    lineNumbers(),
+    highlightActiveLineGutter(),
+    highlightActiveLine(),
+    highlightSpecialChars(),
+    drawSelection(),
+    bracketMatching(),
+    closeBrackets(),
+    indentOnInput(),
+    history(),
+    foldGutter(),
+    highlightSelectionMatches(),
+    oneDark,
+    seuilTheme,
+    keymap.of([
+      ...closeBracketsKeymap,
+      ...defaultKeymap,
+      ...historyKeymap,
+      ...foldKeymap,
+      ...searchKeymap,
+      indentWithTab,
+    ]),
+  ];
+}
+
+function createExprEditor(parent) {
+  const view = new EditorView({
+    state: EditorState.create({
+      doc: DEFAULT_EXPR,
+      extensions: [
+        ...createBaseExtensions(),
+        javascript(),
+        autocompletion({
+          override: [seuilCompletions],
+          activateOnTyping: true,
+        }),
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) debouncedEval();
+        }),
+        keymap.of([{
+          key: 'Ctrl-Enter',
+          mac: 'Cmd-Enter',
+          run: () => { runEval(); return true; },
+        }]),
+        EditorView.lineWrapping,
+      ],
+    }),
+    parent,
+  });
+  return view;
+}
+
+function createDataEditor(parent) {
+  const view = new EditorView({
+    state: EditorState.create({
+      doc: DEFAULT_DATA,
+      extensions: [
+        ...createBaseExtensions(),
+        json(),
+        linter(jsonParseLinter()),
+        lintGutter(),
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) {
+            validateJsonInput();
+            debouncedEval();
+          }
+        }),
+        keymap.of([{
+          key: 'Ctrl-Enter',
+          mac: 'Cmd-Enter',
+          run: () => { runEval(); return true; },
+        }]),
+        EditorView.lineWrapping,
+      ],
+    }),
+    parent,
+  });
+  return view;
+}
+
+function createResultEditor(parent) {
+  const view = new EditorView({
+    state: EditorState.create({
+      doc: '',
+      extensions: [
+        ...createBaseExtensions(),
+        json(),
+        EditorState.readOnly.of(true),
+        EditorView.lineWrapping,
+      ],
+    }),
+    parent,
+  });
+  return view;
+}
+
+// ============================================================================
+// JSON VALIDATION BADGE
+// ============================================================================
+function validateJsonInput() {
+  if (!dataView) return;
+  const text = dataView.state.doc.toString().trim();
+  if (!text) {
+    $jsonBadge.textContent = 'Empty';
+    $jsonBadge.style.color = 'var(--text-tertiary)';
+    return;
   }
-});
+  try {
+    JSON.parse(text);
+    $jsonBadge.textContent = 'Valid';
+    $jsonBadge.style.color = 'var(--green)';
+  } catch {
+    $jsonBadge.textContent = 'Invalid';
+    $jsonBadge.style.color = 'var(--red)';
+  }
+}
 
-// --- Evaluation ---
+// ============================================================================
+// EVALUATION
+// ============================================================================
 function setStatus(state, text) {
-  statusDot.className = 'status-dot ' + state;
-  statusText.textContent = text;
+  $statusbarDot.className = 'statusbar-dot ' + state;
+  $statusbarText.textContent = text;
+}
+
+function setResultState(state) {
+  $resultDot.className = 'result-dot ' + state;
+}
+
+function showResult(formatted, elapsed) {
+  $resultEmpty.style.display = 'none';
+  $resultError.style.display = 'none';
+  $resultEditorMount.style.display = 'block';
+
+  // Update result editor content
+  if (resultView) {
+    resultView.dispatch({
+      changes: {
+        from: 0,
+        to: resultView.state.doc.length,
+        insert: formatted,
+      },
+    });
+  }
+
+  // Trigger fade-in animation
+  $resultEditorMount.classList.remove('result-fade-in');
+  void $resultEditorMount.offsetHeight;
+  $resultEditorMount.classList.add('result-fade-in');
+
+  // Timing
+  const timeStr = elapsed < 1 ? '<1ms' : Math.round(elapsed) + 'ms';
+  $resultTiming.textContent = timeStr;
+  $resultTiming.style.display = '';
+  $statusbarTiming.textContent = timeStr;
+
+  // Line count
+  const lineCount = formatted.split('\n').length;
+  $resultLines.textContent = lineCount + ' lines';
+  $statusbarLines.textContent = lineCount + 'L';
+
+  setResultState('success');
+  setStatus('ok', 'Success');
+}
+
+function showError(message) {
+  $resultEmpty.style.display = 'none';
+  $resultEditorMount.style.display = 'none';
+  $resultError.style.display = 'block';
+  $resultError.innerHTML = '';
+
+  const container = document.createElement('div');
+  container.className = 'result-error-container';
+
+  const label = document.createElement('div');
+  label.className = 'result-error-label';
+  label.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3"/><circle cx="8" cy="11" r="0.5" fill="currentColor"/></svg> Error';
+
+  const box = document.createElement('div');
+  box.className = 'result-error-box';
+  box.textContent = message;
+
+  container.appendChild(label);
+  container.appendChild(box);
+  $resultError.appendChild(container);
+
+  $resultTiming.style.display = 'none';
+  $resultLines.textContent = '';
+  $statusbarTiming.textContent = '';
+  $statusbarLines.textContent = '';
+
+  setResultState('error');
+  setStatus('err', 'Error');
+}
+
+function showEmpty() {
+  $resultEmpty.style.display = '';
+  $resultEditorMount.style.display = 'none';
+  $resultError.style.display = 'none';
+  $resultTiming.style.display = 'none';
+  $resultLines.textContent = '';
+  $statusbarTiming.textContent = '';
+  $statusbarLines.textContent = '';
+  setResultState('');
+  setStatus('', 'Ready');
 }
 
 function runEval() {
-  if (!wasm_ready) return;
+  if (!wasmReady) return;
 
-  const expr = exprInput.value.trim();
-  const json = jsonInput.value.trim();
+  const expr = exprView ? exprView.state.doc.toString().trim() : '';
+  const jsonStr = dataView ? dataView.state.doc.toString().trim() : '';
 
   if (!expr) {
-    resultOutput.className = 'result-empty';
-    resultOutput.textContent = 'Enter an expression to evaluate';
-    timingEl.textContent = '';
-    setStatus('', 'Ready');
+    showEmpty();
     return;
   }
 
+  setResultState('evaluating');
   setStatus('loading', 'Evaluating...');
 
-  // Use requestAnimationFrame for smooth UI update
   requestAnimationFrame(() => {
     let raw, elapsed;
     try {
       const start = performance.now();
-      raw = evaluate(expr, json);
+      raw = evaluate(expr, jsonStr);
       elapsed = performance.now() - start;
     } catch (e) {
       console.error('[seuil] evaluate() threw:', e);
-      resultOutput.className = 'result-error';
-      resultOutput.textContent = 'WASM error: ' + e.message;
-      setStatus('err', 'WASM error');
+      showError('WASM error: ' + e.message);
       return;
     }
 
     try {
       const result = JSON.parse(raw);
-      timingEl.textContent = elapsed < 1 ? '<1ms' : Math.round(elapsed) + 'ms';
-
       if (result.ok) {
-        const formatted = JSON.stringify(result.result, null, 2);
-        resultOutput.className = '';
-        resultOutput.textContent = formatted === undefined ? 'undefined' : formatted;
-        setStatus('ok', 'Success');
+        const formatted = result.result === undefined
+          ? 'undefined'
+          : JSON.stringify(result.result, null, 2);
+        showResult(formatted, elapsed);
       } else {
-        resultOutput.className = 'result-error';
-        resultOutput.textContent = result.error;
-        setStatus('err', 'Error');
+        showError(result.error);
+        // Still show timing
+        const timeStr = elapsed < 1 ? '<1ms' : Math.round(elapsed) + 'ms';
+        $statusbarTiming.textContent = timeStr;
       }
     } catch (e) {
-      resultOutput.className = 'result-error';
-      resultOutput.textContent = raw;
-      setStatus('err', 'Parse error');
+      showError(raw || 'Unknown error');
     }
-
-    // Re-trigger animation
-    resultOutput.style.animation = 'none';
-    resultOutput.offsetHeight; // force reflow
-    resultOutput.style.animation = '';
   });
 }
 
 function debouncedEval() {
-  clearTimeout(eval_timeout);
-  eval_timeout = setTimeout(runEval, 150);
+  clearTimeout(evalTimeout);
+  evalTimeout = setTimeout(runEval, 150);
 }
 
-// --- Init ---
+// ============================================================================
+// EXAMPLES DROPDOWN
+// ============================================================================
+function buildExamplesDropdown() {
+  $examplesDropdown.innerHTML = '';
+  let currentCat = '';
+
+  for (const ex of EXAMPLES) {
+    if (ex.cat !== currentCat) {
+      currentCat = ex.cat;
+      const catEl = document.createElement('div');
+      catEl.className = 'examples-category';
+      catEl.textContent = currentCat;
+      $examplesDropdown.appendChild(catEl);
+    }
+
+    const item = document.createElement('div');
+    item.className = 'example-item';
+    item.setAttribute('role', 'option');
+    item.innerHTML = `
+      <div class="example-name">${ex.name}</div>
+      <div class="example-desc">${ex.desc}</div>
+      <div class="example-expr">${escapeHtml(ex.expr.replace(/\n/g, ' '))}</div>
+    `;
+    item.addEventListener('click', () => {
+      loadExample(ex);
+      closeExamples();
+    });
+    $examplesDropdown.appendChild(item);
+  }
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function loadExample(ex) {
+  if (exprView) {
+    exprView.dispatch({
+      changes: { from: 0, to: exprView.state.doc.length, insert: ex.expr },
+    });
+  }
+  if (ex.data && dataView) {
+    dataView.dispatch({
+      changes: { from: 0, to: dataView.state.doc.length, insert: ex.data },
+    });
+  }
+  runEval();
+}
+
+function toggleExamples() {
+  const isOpen = $examplesDropdown.classList.contains('open');
+  if (isOpen) {
+    closeExamples();
+  } else {
+    openExamples();
+  }
+}
+
+function openExamples() {
+  $examplesDropdown.classList.add('open');
+  $examplesTrigger.classList.add('open');
+  $examplesTrigger.setAttribute('aria-expanded', 'true');
+  $examplesOverlay.classList.add('open');
+}
+
+function closeExamples() {
+  $examplesDropdown.classList.remove('open');
+  $examplesTrigger.classList.remove('open');
+  $examplesTrigger.setAttribute('aria-expanded', 'false');
+  $examplesOverlay.classList.remove('open');
+}
+
+$examplesTrigger.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleExamples();
+});
+
+$examplesOverlay.addEventListener('click', closeExamples);
+
+// Close on Escape
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeExamples();
+});
+
+// ============================================================================
+// RESIZABLE SPLITTERS
+// ============================================================================
+function setupVerticalDivider() {
+  const divider = document.getElementById('divider-v');
+  const leftPane = document.getElementById('left-pane');
+  const rightPane = document.getElementById('right-pane');
+  const main = document.getElementById('main');
+  let dragging = false;
+
+  function onMouseDown(e) {
+    e.preventDefault();
+    dragging = true;
+    divider.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }
+
+  function onMouseMove(e) {
+    if (!dragging) return;
+    const rect = main.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const total = rect.width - 5; // minus divider
+    const leftRatio = Math.max(0.2, Math.min(0.8, x / rect.width));
+    const rightRatio = 1 - leftRatio;
+    leftPane.style.flex = leftRatio.toString();
+    rightPane.style.flex = rightRatio.toString();
+  }
+
+  function onMouseUp() {
+    if (!dragging) return;
+    dragging = false;
+    divider.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  }
+
+  divider.addEventListener('mousedown', onMouseDown);
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+}
+
+function setupHorizontalDivider() {
+  const divider = document.getElementById('divider-h');
+  const exprPanel = document.getElementById('expr-panel');
+  const dataPanel = document.getElementById('data-panel');
+  const leftPane = document.getElementById('left-pane');
+  let dragging = false;
+
+  function onMouseDown(e) {
+    e.preventDefault();
+    dragging = true;
+    divider.classList.add('dragging');
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+  }
+
+  function onMouseMove(e) {
+    if (!dragging) return;
+    const rect = leftPane.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const ratio = Math.max(0.15, Math.min(0.85, y / rect.height));
+    exprPanel.style.flex = ratio.toString();
+    dataPanel.style.flex = (1 - ratio).toString();
+  }
+
+  function onMouseUp() {
+    if (!dragging) return;
+    dragging = false;
+    divider.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  }
+
+  divider.addEventListener('mousedown', onMouseDown);
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+}
+
+// ============================================================================
+// KEYBOARD SHORTCUTS
+// ============================================================================
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    runEval();
+  }
+});
+
+// ============================================================================
+// INIT
+// ============================================================================
 async function main() {
   setStatus('loading', 'Loading WASM...');
-  console.log('[seuil] Loading WASM module...');
+  console.log('[seuil] Initializing playground...');
 
+  // Create editors
+  exprView = createExprEditor(document.getElementById('expr-editor-mount'));
+  dataView = createDataEditor(document.getElementById('data-editor-mount'));
+  resultView = createResultEditor(document.getElementById('result-editor-mount'));
+
+  // Build examples
+  buildExamplesDropdown();
+
+  // Set up splitters
+  setupVerticalDivider();
+  setupHorizontalDivider();
+
+  // Validate initial JSON
+  validateJsonInput();
+
+  // Load WASM
   try {
     await init();
-    wasm_ready = true;
+    wasmReady = true;
     console.log('[seuil] WASM loaded successfully');
     setStatus('ok', 'Ready');
-    buildExamplesDropdown();
-
-    exprInput.addEventListener('input', debouncedEval);
-    jsonInput.addEventListener('input', debouncedEval);
-
-    // Keyboard shortcuts
-    document.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
-        runEval();
-      }
-    });
-
-    // Initial eval
     runEval();
   } catch (e) {
     console.error('[seuil] WASM load failed:', e);
     setStatus('err', 'Failed to load WASM');
-    resultOutput.className = 'result-error';
-    resultOutput.textContent = 'Failed to load WebAssembly module: ' + e.message + '\n\nCheck browser console for details.';
+    showError('Failed to load WebAssembly module: ' + e.message + '\n\nMake sure you have run wasm-pack build in the playground crate.\nCheck the browser console for details.');
   }
 }
 
