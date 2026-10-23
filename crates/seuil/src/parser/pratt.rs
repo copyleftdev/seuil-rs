@@ -42,6 +42,8 @@ impl Symbol for Token {
             TokenKind::Bool(ref v) => Ok(Ast::new(AstKind::Bool(*v), self.span)),
             TokenKind::Str(ref v) => Ok(Ast::new(AstKind::String(v.clone()), self.span)),
             TokenKind::Number(v) => Ok(Ast::new(AstKind::Number(v), self.span)),
+            #[cfg(feature = "bigdecimal")]
+            TokenKind::Decimal(ref v) => Ok(Ast::new(AstKind::Decimal(v.clone()), self.span)),
             TokenKind::Regex(ref v) => Ok(Ast::new(AstKind::Regex(v.clone()), self.span)),
             TokenKind::Name(ref v) => Ok(Ast::new(AstKind::Name(v.clone()), self.span)),
             TokenKind::Var(ref v) => Ok(Ast::new(AstKind::Var(v.clone()), self.span)),

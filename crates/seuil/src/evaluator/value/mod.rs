@@ -40,6 +40,8 @@ pub enum Value<'a> {
     Undefined,
     Null,
     Number(f64),
+    #[cfg(feature = "bigdecimal")]
+    Decimal(BumpString<'a>),
     Bool(bool),
     String(BumpString<'a>),
     Regex(std::boxed::Box<RegexLiteral>),
@@ -117,12 +119,30 @@ impl<'a> Value<'a> {
         arena.alloc(Value::Number(value.into()))
     }
 
-    pub fn number_from_u128(arena: &'a Bump, value: u128) -> Result<&'a mut Value<'a>> {
-        let value_f64 = value as f64;
-        if value_f64 as u128 != value {
-            return Err(Error::D1001NumberOutOfRange(value_f64));
+    #[cfg(feature = "bigdecimal")]
+    pub fn decimal(arena: &'a Bump, value: bigdecimal::BigDecimal) -> &'a mut Value<'a> {
+        if let Some(n) = crate::decimal::lossless_f64(&value) {
+            return Value::number(arena, n);
         }
-        Ok(arena.alloc(Value::Number(value_f64)))
+        arena.alloc(Value::Decimal(BumpString::from_str_in(
+            &value.to_string(),
+            arena,
+        )))
+    }
+
+    pub fn number_from_u128(arena: &'a Bump, value: u128) -> Result<&'a mut Value<'a>> {
+        #[cfg(feature = "bigdecimal")]
+        {
+            Ok(Value::decimal(arena, bigdecimal::BigDecimal::from(value)))
+        }
+        #[cfg(not(feature = "bigdecimal"))]
+        {
+            let value_f64 = value as f64;
+            if value_f64 as u128 != value {
+                return Err(Error::D1001NumberOutOfRange(value_f64));
+            }
+            Ok(arena.alloc(Value::Number(value_f64)))
+        }
     }
 
     pub fn string(arena: &'a Bump, value: &str) -> &'a mut Value<'a> {
@@ -199,12 +219,18 @@ impl<'a> Value<'a> {
     }
 
     pub fn is_number(&self) -> bool {
+        #[cfg(feature = "bigdecimal")]
+        if matches!(self, Value::Decimal(..)) {
+            return true;
+        }
         matches!(self, Value::Number(..))
     }
 
     pub fn is_integer(&self) -> bool {
         match self {
             Value::Number(n) => n.is_finite() && n.trunc() == *n,
+            #[cfg(feature = "bigdecimal")]
+            Value::Decimal(n) => crate::decimal::parse(n).is_ok_and(|n| n.is_integer()),
             _ => false,
         }
     }
@@ -230,6 +256,11 @@ impl<'a> Value<'a> {
 
     pub fn is_valid_number(&self) -> Result<bool> {
         match self {
+            #[cfg(feature = "bigdecimal")]
+            Value::Decimal(n) => {
+                crate::decimal::parse(n)?;
+                Ok(true)
+            }
             Value::Number(n) => {
                 if n.is_nan() {
                     Ok(false)
@@ -244,6 +275,10 @@ impl<'a> Value<'a> {
     }
 
     pub fn is_finite(&self) -> bool {
+        #[cfg(feature = "bigdecimal")]
+        if matches!(self, Value::Decimal(..)) {
+            return true;
+        }
         matches!(self, Value::Number(n) if n.is_finite())
     }
 
@@ -256,6 +291,10 @@ impl<'a> Value<'a> {
     pub fn try_as_f64(&self) -> Result<f64> {
         match self {
             Value::Number(n) => Ok(*n),
+            #[cfg(feature = "bigdecimal")]
+            Value::Decimal(n) => n
+                .parse::<f64>()
+                .map_err(|_| Error::D3137Error("Invalid decimal".into())),
             _ => Err(Error::D1001NumberOutOfRange(0.0)),
         }
     }
@@ -270,6 +309,8 @@ impl<'a> Value<'a> {
     /// Panicking accessor — only use when type is guaranteed.
     pub fn as_f64(&self) -> f64 {
         match self {
+            #[cfg(feature = "bigdecimal")]
+            Value::Decimal(n) => n.parse::<f64>().unwrap_or(f64::NAN),
             Value::Number(n) => *n,
             _ => panic!("Value::as_f64 called on non-number"),
         }
@@ -277,6 +318,8 @@ impl<'a> Value<'a> {
 
     pub fn as_usize(&self) -> usize {
         match self {
+            #[cfg(feature = "bigdecimal")]
+            Value::Decimal(n) => n.parse::<f64>().unwrap_or(f64::NAN) as usize,
             Value::Number(n) => *n as usize,
             _ => panic!("Value::as_usize called on non-number"),
         }
@@ -284,6 +327,8 @@ impl<'a> Value<'a> {
 
     pub fn as_isize(&self) -> isize {
         match self {
+            #[cfg(feature = "bigdecimal")]
+            Value::Decimal(n) => n.parse::<f64>().unwrap_or(f64::NAN) as isize,
             Value::Number(n) => *n as isize,
             _ => panic!("Value::as_isize called on non-number"),
         }
@@ -432,6 +477,8 @@ impl<'a> Value<'a> {
             Value::Undefined => false,
             Value::Null => false,
             Value::Number(n) => *n != 0.0,
+            #[cfg(feature = "bigdecimal")]
+            Value::Decimal(n) => crate::decimal::parse(n).is_ok_and(|n| n != 0),
             Value::Bool(b) => *b,
             Value::String(ref s) => !s.is_empty(),
             Value::Array(ref a, _) => match a.len() {
@@ -453,6 +500,8 @@ impl<'a> Value<'a> {
             Value::Undefined => arena.alloc(Value::Undefined),
             Value::Null => Value::null(arena),
             Value::Number(n) => Value::number(arena, *n),
+            #[cfg(feature = "bigdecimal")]
+            Value::Decimal(n) => arena.alloc(Value::Decimal(BumpString::from_str_in(n, arena))),
             Value::Bool(b) => arena.alloc(Value::Bool(*b)),
             Value::String(s) => arena.alloc(Value::String(s.clone())),
             Value::Array(a, f) => Value::array_from(arena, a.clone(), *f),
@@ -541,7 +590,17 @@ impl<'a> Value<'a> {
         match json {
             serde_json::Value::Null => Value::null(arena),
             serde_json::Value::Bool(b) => arena.alloc(Value::Bool(*b)),
+            #[cfg(not(feature = "bigdecimal"))]
             serde_json::Value::Number(n) => Value::number(arena, n.as_f64().unwrap()),
+            #[cfg(feature = "bigdecimal")]
+            serde_json::Value::Number(n) => {
+                // serde_json already validated this number's text.
+                let text = n.to_string();
+                match crate::decimal::parse(&text) {
+                    Ok(decimal) => Value::decimal(arena, decimal),
+                    Err(_) => arena.alloc(Value::Decimal(BumpString::from_str_in(&text, arena))),
+                }
+            }
             serde_json::Value::String(s) => Value::string(arena, s),
             serde_json::Value::Array(a) => {
                 let array = Value::array_with_capacity(arena, a.len(), ArrayFlags::empty());

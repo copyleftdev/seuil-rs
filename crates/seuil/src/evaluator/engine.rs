@@ -159,6 +159,8 @@ impl<'a, 'env> Evaluator<'a, 'env> {
             AstKind::Bool(b) => Ok(self.val_bool(b)),
             AstKind::String(ref s) => Ok(Value::string(self.arena, s)),
             AstKind::Number(n) => Ok(Value::number(self.arena, n)),
+            #[cfg(feature = "bigdecimal")]
+            AstKind::Decimal(ref n) => Ok(Value::decimal(self.arena, crate::decimal::parse(n)?)),
             AstKind::Regex(ref r) => Ok(self.arena.alloc(Value::Regex(r.clone()))),
 
             AstKind::Block(ref exprs) => self.evaluate_block(exprs, input),
@@ -299,6 +301,10 @@ impl<'a, 'env> Evaluator<'a, 'env> {
                 let result = self.evaluate(value, input)?;
                 match result {
                     Value::Undefined => Ok(self.undefined()),
+                    #[cfg(feature = "bigdecimal")]
+                    Value::Decimal(_) => {
+                        Ok(Value::decimal(self.arena, -crate::decimal::number(result)?))
+                    }
                     Value::Number(n) if result.is_valid_number()? => {
                         Ok(Value::number(self.arena, -*n))
                     }
@@ -372,7 +378,7 @@ impl<'a, 'env> Evaluator<'a, 'env> {
                 let l = if lhs.is_undefined() {
                     return Ok(self.undefined());
                 } else if lhs.is_valid_number()? {
-                    lhs.as_f64()
+                    lhs
                 } else {
                     return Err(Error::T2001LeftSideNotNumber(node.span, op.to_string()));
                 };
@@ -380,11 +386,28 @@ impl<'a, 'env> Evaluator<'a, 'env> {
                 let r = if rhs.is_undefined() {
                     return Ok(self.undefined());
                 } else if rhs.is_valid_number()? {
-                    rhs.as_f64()
+                    rhs
                 } else {
                     return Err(Error::T2002RightSideNotNumber(node.span, op.to_string()));
                 };
 
+                #[cfg(feature = "bigdecimal")]
+                {
+                    let l = crate::decimal::number(lhs)?;
+                    let r = crate::decimal::number(rhs)?;
+                    if !matches!(op, BinaryOp::Divide | BinaryOp::Modulus) || r != 0 {
+                        let result = match op {
+                            BinaryOp::Add => &l + &r,
+                            BinaryOp::Subtract => &l - &r,
+                            BinaryOp::Multiply => &l * &r,
+                            BinaryOp::Divide => &l / &r,
+                            BinaryOp::Modulus => &l % &r,
+                            _ => return Err(Error::D3137Error("Invalid decimal operator".into())),
+                        };
+                        return Ok(Value::decimal(self.arena, result));
+                    }
+                }
+                let (l, r) = (l.as_f64(), r.as_f64());
                 let result = match op {
                     BinaryOp::Add => l + r,
                     BinaryOp::Subtract => l - r,
@@ -421,8 +444,10 @@ impl<'a, 'env> Evaluator<'a, 'env> {
                 }
 
                 if lhs.is_number() && rhs.is_number() {
-                    let l = lhs.as_f64();
-                    let r = rhs.as_f64();
+                    #[cfg(not(feature = "bigdecimal"))]
+                    let (l, r) = (lhs.as_f64(), rhs.as_f64());
+                    #[cfg(feature = "bigdecimal")]
+                    let (l, r) = (crate::decimal::number(lhs)?, crate::decimal::number(rhs)?);
                     return Ok(self.val_bool(match op {
                         BinaryOp::LessThan => l < r,
                         BinaryOp::LessThanEqual => l <= r,
@@ -949,6 +974,16 @@ impl<'a, 'env> Evaluator<'a, 'env> {
 
                 let ord = match (aa, bb) {
                     (Value::String(ref sa), Value::String(ref sb)) => sa.cmp(sb),
+                    #[cfg(feature = "bigdecimal")]
+                    (a, b) if a.is_number() && b.is_number() => {
+                        match (crate::decimal::number(a), crate::decimal::number(b)) {
+                            (Ok(a), Ok(b)) => a.cmp(&b),
+                            (Err(e), _) | (_, Err(e)) => {
+                                sort_error = Some(e);
+                                std::cmp::Ordering::Equal
+                            }
+                        }
+                    }
                     (Value::Number(na), Value::Number(nb)) => na.total_cmp(nb),
                     _ => {
                         sort_error = Some(Error::T2007CompareTypeMismatch(
@@ -1761,6 +1796,8 @@ fn simple_stringify<'a>(value: &'a Value<'a>, buf: &mut String) {
         Value::Undefined => {}
         Value::Null => buf.push_str("null"),
         Value::Bool(b) => buf.push_str(if *b { "true" } else { "false" }),
+        #[cfg(feature = "bigdecimal")]
+        Value::Decimal(n) => buf.push_str(n),
         Value::Number(n) => {
             if n.is_nan() || n.is_infinite() {
                 buf.push_str("null");
@@ -1818,6 +1855,8 @@ mod tests {
             Value::Null => serde_json::Value::Null,
             Value::Bool(b) => serde_json::Value::Bool(*b),
             Value::Number(n) => serde_json::json!(*n),
+            #[cfg(feature = "bigdecimal")]
+            Value::Decimal(n) => serde_json::from_str(n).unwrap(),
             Value::String(ref s) => serde_json::Value::String(s.as_str().to_string()),
             Value::Array(ref a, _) => {
                 let arr: Vec<serde_json::Value> = a.iter().map(|v| value_to_json(v)).collect();

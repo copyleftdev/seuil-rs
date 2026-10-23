@@ -306,6 +306,8 @@ pub fn fn_type<'a>(context: FnContext<'a, '_>, args: &[&'a Value<'a>]) -> Result
         Value::Undefined => return Ok(Value::undefined(context.arena)),
         Value::Null => "null",
         Value::Number(..) => "number",
+        #[cfg(feature = "bigdecimal")]
+        Value::Decimal(..) => "number",
         Value::Bool(..) => "boolean",
         Value::String(..) => "string",
         Value::Array(..) | Value::Range(..) => "array",

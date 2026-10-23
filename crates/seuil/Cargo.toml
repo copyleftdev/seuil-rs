@@ -12,7 +12,12 @@ categories = ["parser-implementations", "encoding", "data-structures", "compiler
 documentation = "https://docs.rs/seuil"
 rust-version = "1.77.0"
 
+[features]
+default = []
+bigdecimal = ["dep:bigdecimal", "serde_json/arbitrary_precision"]
+
 [dependencies]
+bigdecimal = { version = "0.4", optional = true }
 bumpalo = { workspace = true }
 hashbrown = { workspace = true }
 indexmap = { workspace = true }

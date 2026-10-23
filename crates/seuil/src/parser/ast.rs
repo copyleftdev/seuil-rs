@@ -160,6 +160,8 @@ pub enum AstKind {
     Bool(bool),
     String(String),
     Number(f64),
+    #[cfg(feature = "bigdecimal")]
+    Decimal(String),
     Regex(Box<RegexLiteral>),
     Name(String),
     Var(String),

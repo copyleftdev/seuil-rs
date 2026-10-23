@@ -53,6 +53,49 @@ seuil = "0.1"
 serde_json = "1"
 ```
 
+## Decimal arithmetic (optional)
+
+Enable the `bigdecimal` feature to preserve decimal precision:
+
+```toml
+seuil = { version = "0.1", features = ["bigdecimal"] }
+```
+
+This also enables `serde_json/arbitrary_precision`. Parse JSON text with
+`evaluate_str` or `serde_json::from_str` to retain every input digit; a Rust `f64`
+literal passed to `json!` has already been rounded before Seuil receives it.
+
+```rust
+use seuil::Seuil;
+
+let expr = Seuil::compile("orders[status='paid'].amount ~> $sum()")?;
+let result = expr.evaluate_str(r#"{"orders":[
+    {"status":"paid","amount":"100.30"},
+    {"status":"pending","amount":"50.40"},
+    {"status":"paid","amount":"200.25"}
+]}"#)?;
+assert_eq!(result, serde_json::json!("300.55"));
+```
+
+Numeric functions accept decimal strings as well as numbers. If an operand is a
+string, the numeric result is a normalized decimal string; number-only inputs
+produce JSON numbers. `$number` explicitly converts a string to a number.
+Ordinary strings retain their type outside numeric functions. Arithmetic
+operators still require numbers: use `$number` to convert a string first.
+
+Addition, subtraction, multiplication, remainder, comparisons, and aggregates
+use decimal arithmetic. Division, averages, square roots, and powers use
+BigDecimal's precision rules (normally 100 significant digits for inexact
+results). `$round` uses half-even rounding and accepts precision from -10,000 to
+10,000. `$power` supports integer and half-integer exponents; other fractional
+exponents return `D3061` instead of falling back to floating point. `$random`
+retains the existing environment-provided random number behavior.
+
+The feature intentionally extends JSONata's numeric semantics: decimal strings
+are accepted, numbers can exceed the `f64` range, and `$string` preserves numeric
+precision instead of truncating to 15 digits. The default feature set retains
+the existing floating-point behavior.
+
 ## API
 
 ```rust
