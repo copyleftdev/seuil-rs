@@ -62,6 +62,8 @@ pub enum TokenKind {
     Bool(bool),
     Str(String),
     Number(f64),
+    #[cfg(feature = "bigdecimal")]
+    Decimal(String),
     Regex(Box<RegexLiteral>),
 
     // Identifiers
@@ -118,6 +120,8 @@ impl std::fmt::Display for TokenKind {
             Str(v) => write!(f, "\"{v}\""),
             Regex(v) => write!(f, "/{}/", v.as_pattern()),
             Number(v) => write!(f, "{v}"),
+            #[cfg(feature = "bigdecimal")]
+            Decimal(v) => write!(f, "{v}"),
             Name(v) => write!(f, "{v}"),
             Var(v) => write!(f, "${v}"),
         }
@@ -632,18 +636,29 @@ impl<'a> Tokenizer<'a> {
         }
 
         let slice = &self.input[self.start_byte_index..self.byte_index];
-        let n = slice
-            .parse::<f64>()
-            .map_err(|_| Error::S0201SyntaxError(self.current_span(), slice.to_string()))?;
-
-        match n.classify() {
-            std::num::FpCategory::Infinite
-            | std::num::FpCategory::Nan
-            | std::num::FpCategory::Subnormal => Err(Error::S0102LexedNumberOutOfRange(
-                self.current_span(),
-                self.token_string(),
-            )),
-            _ => Ok(TokenKind::Number(n)),
+        #[cfg(feature = "bigdecimal")]
+        {
+            let decimal = crate::decimal::parse(slice)
+                .map_err(|_| Error::S0201SyntaxError(self.current_span(), slice.to_string()))?;
+            Ok(match crate::decimal::lossless_f64(&decimal) {
+                Some(n) => TokenKind::Number(n),
+                None => TokenKind::Decimal(decimal.to_string()),
+            })
+        }
+        #[cfg(not(feature = "bigdecimal"))]
+        {
+            let n = slice
+                .parse::<f64>()
+                .map_err(|_| Error::S0201SyntaxError(self.current_span(), slice.to_string()))?;
+            match n.classify() {
+                std::num::FpCategory::Infinite
+                | std::num::FpCategory::Nan
+                | std::num::FpCategory::Subnormal => Err(Error::S0102LexedNumberOutOfRange(
+                    self.current_span(),
+                    self.token_string(),
+                )),
+                _ => Ok(TokenKind::Number(n)),
+            }
         }
     }
 }

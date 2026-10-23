@@ -6,6 +6,12 @@ use super::Value;
 
 impl<'a> PartialEq<Value<'a>> for Value<'a> {
     fn eq(&self, other: &Value<'a>) -> bool {
+        #[cfg(feature = "bigdecimal")]
+        if self.is_number() && other.is_number() {
+            if let (Ok(l), Ok(r)) = (crate::decimal::number(self), crate::decimal::number(other)) {
+                return l == r;
+            }
+        }
         match (self, other) {
             (Value::Undefined, Value::Undefined) => true,
             (Value::Null, Value::Null) => true,
@@ -59,6 +65,8 @@ impl std::fmt::Debug for Value<'_> {
             Value::Undefined => write!(f, "undefined"),
             Value::Null => write!(f, "null"),
             Value::Number(n) => n.fmt(f),
+            #[cfg(feature = "bigdecimal")]
+            Value::Decimal(n) => f.write_str(n),
             Value::Bool(b) => b.fmt(f),
             Value::String(s) => s.fmt(f),
             Value::Array(a, _) => a.fmt(f),
@@ -83,12 +91,21 @@ impl std::fmt::Display for Value<'_> {
 
 impl Hash for Value<'_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
+        #[cfg(feature = "bigdecimal")]
+        if let Ok(n) = crate::decimal::number(self) {
+            // Decimal and f64 values that compare equal must hash equally.
+            std::mem::discriminant(&Value::Number(0.0)).hash(state);
+            n.normalized().to_string().hash(state);
+            return;
+        }
         // Discriminant tag
         std::mem::discriminant(self).hash(state);
         match self {
             Value::Undefined => {}
             Value::Null => {}
             Value::Number(n) => n.to_bits().hash(state),
+            #[cfg(feature = "bigdecimal")]
+            Value::Decimal(n) => n.hash(state),
             Value::Bool(b) => b.hash(state),
             Value::String(s) => s.hash(state),
             Value::Array(a, _) => a.hash(state),

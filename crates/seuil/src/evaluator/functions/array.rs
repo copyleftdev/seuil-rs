@@ -109,6 +109,10 @@ pub fn fn_sort<'a>(context: FnContext<'a, '_>, args: &[&'a Value<'a>]) -> Result
                 let cmp_result = (context.apply_fn)(span, context.input, comparator, &[a, b])?;
                 // Comparator should return a number. Negative = a < b, positive = a > b.
                 // Or a boolean: true = swap (a > b).
+                #[cfg(feature = "bigdecimal")]
+                if let Value::Decimal(_) = cmp_result {
+                    return Ok(crate::decimal::number(cmp_result)? > 0);
+                }
                 if let Value::Number(n) = cmp_result {
                     Ok(*n > 0.0)
                 } else if let Value::Bool(b) = cmp_result {
@@ -130,6 +134,10 @@ pub fn fn_sort<'a>(context: FnContext<'a, '_>, args: &[&'a Value<'a>]) -> Result
     let sorted = merge_sort(
         unsorted,
         &|a: &'a Value<'a>, b: &'a Value<'a>| match (a, b) {
+            #[cfg(feature = "bigdecimal")]
+            (a, b) if a.is_number() && b.is_number() => {
+                Ok(crate::decimal::number(a)? > crate::decimal::number(b)?)
+            }
             (Value::Number(a), Value::Number(b)) => Ok(a > b),
             (Value::String(a), Value::String(b)) => Ok(a > b),
             _ => Err(Error::D3070InvalidDefaultSort(Span::at(context.char_index))),

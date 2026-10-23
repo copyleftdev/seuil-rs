@@ -16,7 +16,27 @@ The MSRV is **1.77.0**. This is enforced in CI and specified in `Cargo.toml` via
 
 ## Feature Flags
 
-seuil-rs has no optional feature flags. All 47 built-in functions, all operators, and the full JSONata language are available by default.
+All built-in functions and operators are available by default. Enable optional
+`bigdecimal` support for arbitrary-precision JSON numbers and decimal numeric
+functions. Until this feature is released on crates.io, use the Git revision
+containing the implementation:
+
+```toml
+seuil = { git = "https://github.com/copyleftdev/seuil-rs", rev = "0d8d280d8da4384e2c1625c21d8512a1aa0ec7ff", features = ["bigdecimal"] }
+```
+
+This enables `serde_json/arbitrary_precision`. Use `evaluate_str` or parse JSON
+text to avoid rounding inputs through Rust floating-point literals. Numeric
+functions accept decimal strings and return strings when given string operands;
+number-only inputs return JSON numbers. `$number` converts explicitly to a number.
+For example, `$sum(["100.30", "200.25"])` returns `"300.55"`.
+
+Inexact division, averages, roots, and powers follow BigDecimal's precision rules
+(normally 100 significant digits). `$power` supports integer and half-integer
+exponents; other fractional exponents return `D3061`. `$round` uses half-even
+rounding with precision between -10,000 and 10,000. `$random` remains unchanged.
+With this feature, string conversion preserves decimal precision and values can
+exceed the floating-point range. Without it, existing behavior is unchanged.
 
 ## Dependencies
 

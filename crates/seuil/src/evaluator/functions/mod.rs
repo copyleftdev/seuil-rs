@@ -7,6 +7,10 @@
 pub mod array;
 pub mod datetime;
 pub mod hof;
+#[cfg(not(feature = "bigdecimal"))]
+pub mod numeric;
+#[cfg(feature = "bigdecimal")]
+#[path = "numeric_decimal.rs"]
 pub mod numeric;
 pub mod object;
 pub mod string;

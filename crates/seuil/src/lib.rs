@@ -32,6 +32,8 @@
 
 pub mod clock;
 pub mod datetime;
+#[cfg(feature = "bigdecimal")]
+mod decimal;
 pub mod errors;
 pub mod evaluator;
 pub mod parser;
@@ -369,6 +371,8 @@ fn value_to_json(val: &evaluator::value::Value<'_>) -> serde_json::Value {
         Value::Null => serde_json::Value::Null,
         Value::Bool(b) => serde_json::Value::Bool(*b),
         Value::Number(n) => serde_json::json!(*n),
+        #[cfg(feature = "bigdecimal")]
+        Value::Decimal(n) => serde_json::from_str(n).unwrap_or(serde_json::Value::Null),
         Value::String(ref s) => serde_json::Value::String(s.as_str().to_string()),
         Value::Array(ref a, _) => {
             let arr: Vec<serde_json::Value> = a.iter().map(|v| value_to_json(v)).collect();

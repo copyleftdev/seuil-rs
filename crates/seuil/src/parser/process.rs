@@ -189,6 +189,10 @@ fn process_path(span: Span, lhs: &mut Box<Ast>, rhs: &mut Box<Ast>) -> Result<As
                 AstKind::Number(..) | AstKind::Bool(..) | AstKind::Null => {
                     return Err(Error::S0213InvalidStep(step.span, "TODO".to_string()));
                 }
+                #[cfg(feature = "bigdecimal")]
+                AstKind::Decimal(..) => {
+                    return Err(Error::S0213InvalidStep(step.span, "number".to_string()));
+                }
                 AstKind::String(ref s) => {
                     step.kind = AstKind::Name(s.clone());
                 }

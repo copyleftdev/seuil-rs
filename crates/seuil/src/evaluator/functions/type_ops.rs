@@ -20,6 +20,8 @@ pub fn fn_boolean<'a>(context: FnContext<'a, '_>, args: &[&'a Value<'a>]) -> Res
         Value::Undefined => Value::undefined(context.arena),
         Value::Null => Value::bool_val(context.arena, false),
         Value::Bool(b) => Value::bool_val(context.arena, *b),
+        #[cfg(feature = "bigdecimal")]
+        Value::Decimal(_) => Value::bool_val(context.arena, arg.is_truthy()),
         Value::Number(n) => {
             arg.is_valid_number()?;
             Value::bool_val(context.arena, *n != 0.0)

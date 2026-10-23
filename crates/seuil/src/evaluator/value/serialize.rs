@@ -157,6 +157,7 @@ impl<T: Formatter> Serializer<T> {
         self.write_char(b'"');
     }
 
+    #[cfg(not(feature = "bigdecimal"))]
     #[inline(always)]
     fn write_number(&mut self, number: f64) {
         const MAX_SIGNIFICANT_DIGITS: usize = 15;
@@ -256,11 +257,25 @@ impl<T: Formatter> Serializer<T> {
             Value::Undefined => {}
             Value::Null => self.write(b"null"),
             Value::String(ref string) => self.write_string(string),
+            #[cfg(feature = "bigdecimal")]
+            Value::Decimal(n) => {
+                crate::decimal::parse(n)?;
+                self.write(n.as_bytes());
+            }
             Value::Number(n) => {
                 if self.fail_on_invalid_numbers {
                     value.is_valid_number()?;
                 }
+                #[cfg(not(feature = "bigdecimal"))]
                 self.write_number(*n);
+                #[cfg(feature = "bigdecimal")]
+                if n.is_finite() {
+                    let mut buffer = dtoa::Buffer::new();
+                    let text = buffer.format_finite(*n);
+                    self.write(text.strip_suffix(".0").unwrap_or(text).as_bytes());
+                } else {
+                    self.write(b"null");
+                }
             }
             Value::Bool(true) => self.write(b"true"),
             Value::Bool(false) => self.write(b"false"),
