@@ -18,10 +18,11 @@ The MSRV is **1.77.0**. This is enforced in CI and specified in `Cargo.toml` via
 
 All built-in functions and operators are available by default. Enable optional
 `bigdecimal` support for arbitrary-precision JSON numbers and decimal numeric
-functions:
+functions. Until this feature is released on crates.io, use the Git revision
+containing the implementation:
 
 ```toml
-seuil = { version = "0.1", features = ["bigdecimal"] }
+seuil = { git = "https://github.com/copyleftdev/seuil-rs", rev = "0d8d280d8da4384e2c1625c21d8512a1aa0ec7ff", features = ["bigdecimal"] }
 ```
 
 This enables `serde_json/arbitrary_precision`. Use `evaluate_str` or parse JSON
